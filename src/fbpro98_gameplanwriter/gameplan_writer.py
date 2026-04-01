@@ -86,7 +86,7 @@ class GamePlanWriter:
         return NormalPlayEntry(
             filename=f"PNFL\\{filename}",
             play_category=record.play_category,
-            special_category=record.play_file.special_flag,
+            special_category=record.play_file.special_category,
             user_category=record.user_category,
         ), upper_name
 
