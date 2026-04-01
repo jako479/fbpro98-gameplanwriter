@@ -92,17 +92,14 @@ class GamePlanWriter:
 
     def _find_play(self, name: str) -> tuple[PlayRecord | None, str]:
         pool = self._load_pool()
-        upper_name = name.upper()
-        for play in pool.offensive_plays:
-            if play.name == upper_name:
-                return play, "offense"
-        for play in pool.defensive_plays:
-            if play.name == upper_name:
-                return play, "defense"
-        for play in pool.special_teams_plays:
-            if play.name == upper_name:
-                return play, "special"
-        return None, ""
+        record = pool.find_by_name(name)
+        if record is None:
+            return None, ""
+        if record.play_file.is_special_teams:
+            return record, "special"
+        if record.play_file.is_offensive:
+            return record, "offense"
+        return record, "defense"
 
     def _load_pool(self) -> PlayPool:
         if self._pool is None:
