@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fbpro98-gameplanwriter"
+version = "0.1.0"
+description = "Update Front Page Sports Football Pro '98 gameplan (.pln) files from a list of plays."
+authors = [{ name = "Brian J" }]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["fbpro98-gameplan", "pnfl-playpool"]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.format]
+quote-style = "double"

@@ -1,0 +1,8 @@
+{
+  "typeCheckingMode": "basic",
+  "venvPath": ".",
+  "venv": ".venv",
+  "reportMissingImports": "none",
+  "extraPaths": ["src", "../fbpro98-gameplan/src", "tests"],
+  "include": ["src", "tests", "scripts"]
+}
