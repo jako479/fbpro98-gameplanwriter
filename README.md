@@ -2,7 +2,7 @@
 `fbpro98-gameplanwriter` updates the 64 normal-play slots in a Front Page Sports
 Football Pro '98 gameplan (`.pln`) file from a text file of play names.
 It uses `pnfl-playpool` to resolve play names to file paths and `fbpro98-gameplan`
-to read and write the binary `.pln` format. Special and stock-special plays are
+to read and write the binary `.pln` format. Special-teams and clock plays are
 preserved untouched. Offensive/defensive play types are validated against the
 gameplan's profile type.
 ## Setup
@@ -51,7 +51,7 @@ Current tests cover:
 - more than 64 lines truncated to 64
 - fewer than 64 lines pad remaining slots as empty
 - unknown play name skipped with warning
-- special/stock-special plays preserved after write
+- special-teams plays preserved after write
 - case-insensitive play name resolution
 - defensive play in offensive gameplan skipped with warning
 - offensive play in defensive gameplan skipped with warning

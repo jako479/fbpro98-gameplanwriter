@@ -105,3 +105,9 @@ class GamePlanWriter:
         if self._pool is None:
             self._pool = PlayPool.from_directory(self.pnfl_path)
         return self._pool
+
+
+if __name__ == "__main__":
+    from fbpro98_gameplanwriter.cli import main
+
+    raise SystemExit(main())

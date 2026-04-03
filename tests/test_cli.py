@@ -48,5 +48,11 @@ def test_get_pnfl_path_reads_config(tmp_path: Path) -> None:
 
 
 def test_get_pnfl_path_falls_back_to_default() -> None:
-    result = get_pnfl_path(None)
-    assert result == Path(r"C:\SIERRA\FbPro98\PNFL")
+    from fbpro98_gameplanwriter import config
+    original_candidates = config.CONFIG_CANDIDATES
+    config.CONFIG_CANDIDATES = []
+    try:
+        result = get_pnfl_path(None)
+        assert result == Path(r"C:\SIERRA\FbPro98\PNFL")
+    finally:
+        config.CONFIG_CANDIDATES = original_candidates

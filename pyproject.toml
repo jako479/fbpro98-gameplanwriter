@@ -11,6 +11,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["fbpro98-gameplan", "pnfl-playpool"]
 
+[project.scripts]
+fbpro98-gameplanwriter = "fbpro98_gameplanwriter.cli:main"
+
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]
 
