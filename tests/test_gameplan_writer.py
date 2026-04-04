@@ -5,10 +5,11 @@ import shutil
 from pathlib import Path
 
 import pytest
-from conftest import DEFENSE_DIR, DEFENSE_PLN, OFFENSE_PLN, PLAYPOOL_DIR
+from conftest import DEFENSE_DIR, DEFENSE_PLN, OFFENSE_DIR, OFFENSE_PLN, PLAYPOOL_DIR
 from fbpro98_gameplan import read_gameplan
 
 from fbpro98_gameplanwriter.gameplan_writer import GamePlanWriter
+
 
 def _copy_pln(src: Path, tmp_path: Path) -> Path:
     dest = tmp_path / src.name
@@ -275,6 +276,58 @@ def test_den_dgp2_update(tmp_path: Path) -> None:
 
     assert reloaded.is_defense
     assert len(reloaded.normal_plays) == 47
+
+    # Special plays preserved
+    for slot in range(64, 84):
+        orig_play = original.plays_by_slot.get(slot)
+        new_play = reloaded.plays_by_slot.get(slot)
+        if orig_play is None:
+            assert new_play is None
+        else:
+            assert new_play is not None
+            assert new_play.name == orig_play.name
+
+    _assert_matches_expected(pln_path, expected)
+
+
+def test_den_ogp1_update(tmp_path: Path) -> None:
+    src_pln = OFFENSE_DIR / "DEN-OGP1.pln"
+    plays_txt = OFFENSE_DIR / "OGP1.txt"
+    expected = OFFENSE_DIR / "expected" / "DEN-OGP1.pln"
+
+    pln_path = _write_dgp(src_pln, plays_txt, tmp_path)
+
+    original = read_gameplan(src_pln)
+    reloaded = read_gameplan(pln_path)
+
+    assert reloaded.is_offense
+    assert len(reloaded.normal_plays) == 64
+
+    # Special plays preserved
+    for slot in range(64, 84):
+        orig_play = original.plays_by_slot.get(slot)
+        new_play = reloaded.plays_by_slot.get(slot)
+        if orig_play is None:
+            assert new_play is None
+        else:
+            assert new_play is not None
+            assert new_play.name == orig_play.name
+
+    _assert_matches_expected(pln_path, expected)
+
+
+def test_den_ogp2_update(tmp_path: Path) -> None:
+    src_pln = OFFENSE_DIR / "DEN-OGP2.pln"
+    plays_txt = OFFENSE_DIR / "OGP2.txt"
+    expected = OFFENSE_DIR / "expected" / "DEN-OGP2.pln"
+
+    pln_path = _write_dgp(src_pln, plays_txt, tmp_path)
+
+    original = read_gameplan(src_pln)
+    reloaded = read_gameplan(pln_path)
+
+    assert reloaded.is_offense
+    assert len(reloaded.normal_plays) == 64
 
     # Special plays preserved
     for slot in range(64, 84):
