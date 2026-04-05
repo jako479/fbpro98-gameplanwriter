@@ -8,7 +8,22 @@ import pytest
 from conftest import DEFENSE_DIR, DEFENSE_PLN, OFFENSE_DIR, OFFENSE_PLN, PLAYPOOL_DIR
 from fbpro98_gameplan import read_gameplan
 
+from pnfl_playpool import PlayPool
+
 from fbpro98_gameplanwriter.gameplan_writer import GamePlanWriter
+
+_pool: PlayPool | None = None
+
+
+def _get_pool() -> PlayPool:
+    global _pool
+    if _pool is None:
+        _pool = PlayPool.from_directory(PLAYPOOL_DIR)
+    return _pool
+
+
+def _make_writer(pln_path: Path) -> GamePlanWriter:
+    return GamePlanWriter(_get_pool(), pln_path)
 
 
 def _copy_pln(src: Path, tmp_path: Path) -> Path:
@@ -43,7 +58,7 @@ def test_blank_lines_produce_empty_slots(tmp_path: Path) -> None:
     lines = [names[0], "", names[1], "", "", names[2]]
     plays_path = _write_plays_file(tmp_path, lines)
 
-    writer = GamePlanWriter(pln_path, PLAYPOOL_DIR)
+    writer = _make_writer(pln_path)
     writer.write_from_play_list(plays_path)
 
     reloaded = read_gameplan(pln_path)
@@ -58,7 +73,7 @@ def test_lines_beyond_64_ignored_no_blanks(tmp_path: Path) -> None:
     names = _get_offensive_names(66)
     plays_path = _write_plays_file(tmp_path, names)
 
-    writer = GamePlanWriter(pln_path, PLAYPOOL_DIR)
+    writer = _make_writer(pln_path)
     writer.write_from_play_list(plays_path)
 
     reloaded = read_gameplan(pln_path)
@@ -75,7 +90,7 @@ def test_lines_beyond_64_ignored_with_blanks(tmp_path: Path) -> None:
     lines = names[:54] + [""] * 10 + names[54:]
     plays_path = _write_plays_file(tmp_path, lines)
 
-    writer = GamePlanWriter(pln_path, PLAYPOOL_DIR)
+    writer = _make_writer(pln_path)
     writer.write_from_play_list(plays_path)
 
     reloaded = read_gameplan(pln_path)
@@ -93,7 +108,7 @@ def test_unknown_play_name_skipped_with_warning(
     plays_path = _write_plays_file(tmp_path, ["TOTALLYNOTAPLAY"])
 
     with caplog.at_level(logging.WARNING):
-        writer = GamePlanWriter(pln_path, PLAYPOOL_DIR)
+        writer = _make_writer(pln_path)
         writer.write_from_play_list(plays_path)
 
     assert "Play not found" in caplog.text
@@ -108,7 +123,7 @@ def test_case_insensitive_play_names(tmp_path: Path) -> None:
     lowercase_names = [n.lower() for n in names]
     plays_path = _write_plays_file(tmp_path, lowercase_names)
 
-    writer = GamePlanWriter(pln_path, PLAYPOOL_DIR)
+    writer = _make_writer(pln_path)
     writer.write_from_play_list(plays_path)
 
     reloaded = read_gameplan(pln_path)
@@ -124,7 +139,7 @@ def test_defensive_play_in_offensive_gameplan_skipped_with_warning(
     plays_path = _write_plays_file(tmp_path, defensive_names)
 
     with caplog.at_level(logging.WARNING):
-        writer = GamePlanWriter(pln_path, PLAYPOOL_DIR)
+        writer = _make_writer(pln_path)
         writer.write_from_play_list(plays_path)
 
     assert "defensive play" in caplog.text
@@ -141,7 +156,7 @@ def test_offensive_play_in_defensive_gameplan_skipped_with_warning(
     plays_path = _write_plays_file(tmp_path, offensive_names)
 
     with caplog.at_level(logging.WARNING):
-        writer = GamePlanWriter(pln_path, PLAYPOOL_DIR)
+        writer = _make_writer(pln_path)
         writer.write_from_play_list(plays_path)
 
     assert "offensive play" in caplog.text
@@ -157,7 +172,7 @@ def test_special_teams_play_skipped_in_offensive_gameplan(
     plays_path = _write_plays_file(tmp_path, ["AF-KO"])
 
     with caplog.at_level(logging.WARNING):
-        writer = GamePlanWriter(pln_path, PLAYPOOL_DIR)
+        writer = _make_writer(pln_path)
         writer.write_from_play_list(plays_path)
 
     assert "special teams play" in caplog.text
@@ -173,7 +188,7 @@ def test_special_teams_play_skipped_in_defensive_gameplan(
     plays_path = _write_plays_file(tmp_path, ["AF-KO"])
 
     with caplog.at_level(logging.WARNING):
-        writer = GamePlanWriter(pln_path, PLAYPOOL_DIR)
+        writer = _make_writer(pln_path)
         writer.write_from_play_list(plays_path)
 
     assert "special teams play" in caplog.text
@@ -193,7 +208,7 @@ def test_65_plays_with_duplicate_does_not_promote_line_65(
     plays_path = _write_plays_file(tmp_path, lines)
 
     with caplog.at_level(logging.WARNING):
-        writer = GamePlanWriter(pln_path, PLAYPOOL_DIR)
+        writer = _make_writer(pln_path)
         writer.write_from_play_list(plays_path)
 
     assert "Duplicate play" in caplog.text
@@ -213,7 +228,7 @@ def test_duplicate_play_skipped_with_warning(
     plays_path = _write_plays_file(tmp_path, lines)
 
     with caplog.at_level(logging.WARNING):
-        writer = GamePlanWriter(pln_path, PLAYPOOL_DIR)
+        writer = _make_writer(pln_path)
         writer.write_from_play_list(plays_path)
 
     assert "Duplicate play" in caplog.text
@@ -226,7 +241,7 @@ def test_duplicate_play_skipped_with_warning(
 def _write_dgp(src_pln: Path, plays_txt: Path, tmp_path: Path) -> Path:
     """Copy a .pln to tmp_path and write plays into it."""
     pln_path = _copy_pln(src_pln, tmp_path)
-    writer = GamePlanWriter(pln_path, PLAYPOOL_DIR)
+    writer = _make_writer(pln_path)
     writer.write_from_play_list(plays_txt)
     return pln_path
 

@@ -1,3 +1,5 @@
-from pathlib import Path
+"""fbpro98-gameplanwriter package."""
 
-ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+from .cli import main
+
+__all__ = ["main"]

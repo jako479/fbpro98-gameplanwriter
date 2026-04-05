@@ -7,11 +7,12 @@ __pycache__/
 *.pdb
 *.egg-info/
 .eggs/
-.build/
+build/
 dist/
 pip-wheel-metadata/
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 .coverage*
 htmlcov/
 .tox/
@@ -21,10 +22,6 @@ htmlcov/
 env/
 .rye/
 .python-version
-
-# Data (generated / runtime)
-data/*.db
-data/*.sqbpro
 
 # VS Code
 .vscode/*
@@ -40,7 +37,7 @@ pnpm-lock.yaml
 yarn.lock
 
 # AI
-.claude/settings.local.json
+.claude/
 
 # OS
 .DS_Store
