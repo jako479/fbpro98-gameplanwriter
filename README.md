@@ -9,28 +9,36 @@ type.
 ## Setup
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-pip install -e ..\fbpro98-play
-pip install -e ..\fbpro98-gameplan
-pip install -e ..\pnfl-playpool
-pip install -e ".[dev]"
+py -3.13 -m venv .venv
+.venv\Scripts\activate
+py -m pip install -e ..\fbpro98-play
+py -m pip install -e ..\fbpro98-gameplan
+py -m pip install -e ..\pnfl-playpool
+py -m pip install -e ".[dev]"
 ```
 
 ## Usage
 
+Distributed via the [`pnfl`](../pnfl) umbrella CLI:
+
 ```bash
-fbpro98-gameplanwriter offense.pln plays.txt --play-path E:\SIERRA\FbPro98\PNFL
+pnfl write-gameplan offense.pln plays.txt --play-path E:\SIERRA\FbPro98\PNFL
 ```
 
 Or via module:
 
 ```bash
-python -m fbpro98_gameplanwriter offense.pln plays.txt --play-path E:\SIERRA\FbPro98\PNFL
+py -m fbpro98_gameplanwriter offense.pln plays.txt --play-path E:\SIERRA\FbPro98\PNFL
 ```
 
 `--play-path` overrides the config file. Without it, the play path is read from
-`config/gameplan_writer.ini` or falls back to `C:\SIERRA\FbPro98\PNFL`.
+the first config found, or falls back to `C:\SIERRA\FbPro98\PNFL`.
+
+Config lookup order (first match wins; `.dev.ini` variants take precedence at each level):
+
+1. `write-gameplan.dev.ini` / `write-gameplan.ini` in the current working directory
+2. `config/write-gameplan.dev.ini` / `config/write-gameplan.ini` at the project root
+3. `src/fbpro98_gameplanwriter/write-gameplan.dev.ini` / `src/fbpro98_gameplanwriter/write-gameplan.ini`
 
 ### Input format
 
@@ -54,6 +62,11 @@ OR36RL01
 ```
 
 Slot 3 (the blank line) would be empty in the gameplan.
+
+## Building a Release
+
+This project is distributed as part of the [`pnfl`](../pnfl) umbrella CLI.
+See `pnfl/scripts/build_release.py` for release packaging.
 
 ## Testing
 

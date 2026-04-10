@@ -12,7 +12,7 @@ from pnfl_playpool import (
     SpecialTeamsPlayRecord,
 )
 
-from .config import get_config
+from .config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class GamePlanWriter:
 
     @classmethod
     def from_config(
-        cls, gameplan_path: StrPath,
+        cls, config: AppConfig, gameplan_path: StrPath,
     ) -> GamePlanWriter:
         """Convenience factory — builds the play pool from config.
 
@@ -47,7 +47,6 @@ class GamePlanWriter:
         the building so the constructor doesn't have to. Production code
         calls this; test code calls __init__ directly with a pre-built pool.
         """
-        config = get_config()
         play_pool = PlayPool.from_directory(config.Settings.PlayPath)
         return cls(play_pool, gameplan_path)
 

@@ -5,7 +5,7 @@ import logging
 from collections.abc import Sequence
 from pathlib import Path
 
-from .config import set_config_path, set_play_path
+from .config import load_config
 from .gameplan_writer import GamePlanWriter
 
 
@@ -21,7 +21,7 @@ def _valid_existing_file(param: str, expected_extensions: tuple[str, ...]) -> st
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="fbpro98-gameplanwriter",
+        prog="pnfl write-gameplan",
         description="Update a gameplan (.pln) from a list of plays.",
         epilog=(
             "The play list file should contain one play name per line. "
@@ -39,7 +39,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--config",
-        type=lambda v: _valid_existing_file(v, (".ini",)),
         help="Use this INI file instead of the default config lookup",
     )
     parser.add_argument(
@@ -61,10 +60,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         format="%(levelname)s: %(message)s",
     )
 
-    if args.config:
-        set_config_path(args.config)
-    set_play_path(args.play_path)
+    config = load_config(
+        config_path=args.config,
+        play_path=args.play_path,
+    )
 
-    writer = GamePlanWriter.from_config(args.gameplan)
+    writer = GamePlanWriter.from_config(config, args.gameplan)
     writer.write_from_play_list(args.plays)
     return 0
