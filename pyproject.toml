@@ -14,6 +14,9 @@ dependencies = ["fbpro98-gameplan", "pnfl-playpool"]
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]
 
+[project.entry-points."pnfl.commands"]
+write-gameplan = "fbpro98_gameplanwriter.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
