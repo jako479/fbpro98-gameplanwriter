@@ -23,10 +23,28 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="pnfl write-gameplan",
         description="Update a gameplan (.pln) from a list of plays.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "The play list file should contain one play name per line. "
-            "Empty lines produce empty slots. "
-            "Maximum 64 normal plays per gameplan."
+            "Play list file format:\n"
+            "  - One play name per line.\n"
+            "  - Blank lines produce empty slots in the gameplan.\n"
+            "  - Play names are case-insensitive.\n"
+            "  - Maximum 64 normal plays per gameplan; extra lines are ignored.\n"
+            "  - Fewer than 64 lines: remaining slots are emptied.\n"
+            "  - Unknown play names are skipped with a warning.\n"
+            "  - Defensive plays in an offensive gameplan (and vice versa) are\n"
+            "    skipped with a warning.\n"
+            "  - Special-teams and clock plays in the existing gameplan are\n"
+            "    preserved untouched.\n"
+            "\n"
+            "Example play list:\n"
+            "  OR45RL01\n"
+            "  OR10RLRG\n"
+            "\n"
+            "  SF35Hevy\n"
+            "  OR36RL01\n"
+            "\n"
+            "(The blank third line above leaves slot 3 empty.)"
         ),
     )
     parser.add_argument(
