@@ -22,9 +22,10 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-ra --strict-markers --strict-config"
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 
 [tool.ruff.format]
 quote-style = "double"

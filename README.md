@@ -25,12 +25,6 @@ Distributed via the [`pnfl`](../pnfl) umbrella CLI:
 pnfl write-gameplan offense.pln plays.txt --play-path E:\SIERRA\FbPro98\PNFL
 ```
 
-Or via module:
-
-```bash
-py -m fbpro98_gameplanwriter offense.pln plays.txt --play-path E:\SIERRA\FbPro98\PNFL
-```
-
 `--play-path` overrides the config file. Without it, the play path is read from
 the first config found, or falls back to `C:\SIERRA\FbPro98\PNFL`.
 
@@ -73,16 +67,3 @@ See `pnfl/scripts/build_release.py` for release packaging.
 ```bash
 pytest
 ```
-
-Current tests cover:
-
-- writing plays from a text file and reading them back
-- blank lines produce empty slots
-- more than 64 lines truncated to 64
-- fewer than 64 lines pad remaining slots as empty
-- unknown play name skipped with warning
-- special-teams plays preserved after write
-- case-insensitive play name resolution
-- defensive play in offensive gameplan skipped with warning
-- offensive play in defensive gameplan skipped with warning
-- defensive plays write correctly to defensive gameplan

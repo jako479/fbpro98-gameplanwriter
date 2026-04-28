@@ -5,8 +5,8 @@ import logging
 from collections.abc import Sequence
 from pathlib import Path
 
-from .config import load_config
-from .gameplan_writer import GamePlanWriter
+from fbpro98_gameplanwriter.config import load_config
+from fbpro98_gameplanwriter.gameplan_writer import GamePlanWriter
 
 
 def _valid_existing_file(param: str, expected_extensions: tuple[str, ...]) -> str:

@@ -4,7 +4,7 @@ import logging
 from os import PathLike
 from pathlib import Path
 
-from fbpro98_gameplan import GamePlan, NormalPlayEntry, read_gameplan, write_normal_plays
+from fbpro98_gameplan import CustomPlay, GamePlan, read_gameplan, write_gameplan
 from pnfl_playpool import (
     DefensivePlayRecord,
     OffensivePlayRecord,
@@ -12,7 +12,7 @@ from pnfl_playpool import (
     SpecialTeamsPlayRecord,
 )
 
-from .config import AppConfig
+from fbpro98_gameplanwriter.config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,9 @@ class GamePlanWriter:
 
     @classmethod
     def from_config(
-        cls, config: AppConfig, gameplan_path: StrPath,
+        cls,
+        config: AppConfig,
+        gameplan_path: StrPath,
     ) -> GamePlanWriter:
         """Convenience factory — builds the play pool from config.
 
@@ -55,13 +57,13 @@ class GamePlanWriter:
         lines = Path(plays_path).read_text(encoding="utf-8").splitlines()
         lines = lines[:MAX_NORMAL_PLAYS]
         seen: dict[str, int] = {}
-        entries: list[NormalPlayEntry | None] = []
+        entries: list[CustomPlay | None] = []
         for slot, line in enumerate(lines):
             entry, name = self._resolve_line(slot, line, gameplan, seen)
             entries.append(entry)
             if name:
                 seen[name] = slot
-        write_normal_plays(self.gameplan_path, entries)
+        write_gameplan(gameplan.with_normal_plays(entries), self.gameplan_path)
         play_count = sum(1 for e in entries if e is not None)
         logger.info("Wrote %d normal plays to '%s'", play_count, self.gameplan_path)
 
@@ -71,7 +73,7 @@ class GamePlanWriter:
         line: str,
         gameplan: GamePlan,
         seen: dict[str, int],
-    ) -> tuple[NormalPlayEntry | None, str]:
+    ) -> tuple[CustomPlay | None, str]:
         name = line.strip()
         if not name:
             return None, ""
@@ -110,7 +112,7 @@ class GamePlanWriter:
             return None, ""
         relative_path = record.file_path.relative_to(self.play_pool.root_dir)
         filename = str(relative_path).replace("/", "\\")
-        return NormalPlayEntry(
+        return CustomPlay(
             filename=f"PNFL\\{filename}",
             play_category=record.play_category,
             special_category=record.special_category,
