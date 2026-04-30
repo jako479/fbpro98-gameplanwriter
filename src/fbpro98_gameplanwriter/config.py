@@ -4,29 +4,30 @@ import configparser
 from dataclasses import dataclass
 from pathlib import Path
 
-PACKAGE_DIR = Path(__file__).resolve().parent
-PROJECT_DIR = PACKAGE_DIR.parent.parent
-
-DEFAULT_PLAY_PATH = r"C:\SIERRA\FbPro98\PNFL"
-
 CONFIG_CANDIDATES = [
     Path.cwd() / "write-gameplan.dev.ini",
     Path.cwd() / "write-gameplan.ini",
-    PROJECT_DIR / "config" / "write-gameplan.dev.ini",
-    PROJECT_DIR / "config" / "write-gameplan.ini",
-    PACKAGE_DIR / "write-gameplan.dev.ini",
-    PACKAGE_DIR / "write-gameplan.ini",
+    Path.cwd() / "config" / "write-gameplan.dev.ini",
+    Path.cwd() / "config" / "write-gameplan.ini",
 ]
 
-
-@dataclass(frozen=True)
-class Settings:
-    PlayPath: str = DEFAULT_PLAY_PATH
+DEFAULT_PLAY_PATH = r"C:\SIERRA\FbPro98\PNFL"
 
 
 @dataclass(frozen=True)
-class AppConfig:
-    Settings: Settings
+class Config:
+    play_path: str = DEFAULT_PLAY_PATH
+
+
+def load_config(
+    path: Path | None = None,
+    *,
+    play_path: str | None = None,
+) -> Config:
+    cp = _read_config(path or find_config_path())
+    return Config(
+        play_path=play_path or cp.get("Settings", "PlayPath", fallback=DEFAULT_PLAY_PATH),
+    )
 
 
 def find_config_path() -> Path:
@@ -36,16 +37,7 @@ def find_config_path() -> Path:
     )
 
 
-def load_config(
-    config_path: Path | None = None,
-    play_path: str | None = None,
-) -> AppConfig:
-    path = config_path or find_config_path()
+def _read_config(path: Path) -> configparser.ConfigParser:
     cp = configparser.ConfigParser()
     cp.read(path, encoding="utf-8")
-
-    return AppConfig(
-        Settings=Settings(
-            PlayPath=play_path or cp.get("Settings", "PlayPath", fallback=DEFAULT_PLAY_PATH),
-        ),
-    )
+    return cp
