@@ -15,17 +15,16 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Input sources:\n"
-            "  --normal-plays SOURCE   Read 64 normal plays from SOURCE (file or '-' for stdin).\n"
-            "  --special-plays SOURCE  Read 10 custom special teams plays from SOURCE (file or '-' for stdin).\n"
+            "  --normal-plays SOURCE   Read up to 64 normal plays from SOURCE (file or '-' for stdin).\n"
+            "  --special-plays SOURCE  Read up to 10 custom special teams plays from SOURCE.\n"
             "  At least one of --normal-plays or --special-plays is required.\n"
             "  A section that is not supplied is left untouched in the gameplan.\n"
-            "  '=== Normal ===' / '=== Special ===' markers in any source split content\n"
-            "    between sections (case-insensitive). Lines before any marker default to\n"
-            "    the section the flag selected.\n"
+            "  When both flags share the same source (path or '-'), the source must\n"
+            "    contain exactly 74 lines: lines 0-63 -> normal, lines 64-73 -> special.\n"
             "\n"
             "Pipeline-friendly examples:\n"
-            "  pnfl read-gameplan src.pln | pnfl write-gameplan dest.pln --normal-plays - --special-plays -\n"
-            "  pnfl read-gameplan src.pln --output - | pnfl write-gameplan dest.pln --normal-plays -\n"
+            "  pnfl read-gameplan src.pln --normal-out - --special-out - | pnfl write-gameplan dest.pln --normal-plays - --special-plays -\n"
+            "  pnfl read-gameplan src.pln --normal-out - | pnfl write-gameplan dest.pln --normal-plays -\n"
         ),
     )
     parser.add_argument(

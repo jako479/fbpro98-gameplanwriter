@@ -5,12 +5,11 @@ from pathlib import Path
 import pytest
 
 TESTS_DIR = Path(__file__).resolve().parent
-FIXTURES_DIR = TESTS_DIR / "fixtures"
-PLAYPOOL_DIR = FIXTURES_DIR / "plays"
-OFFENSE_DIR = FIXTURES_DIR / "offense"
-DEFENSE_DIR = FIXTURES_DIR / "defense"
-OFFENSE_PLN = OFFENSE_DIR / "offense.pln"
-DEFENSE_PLN = DEFENSE_DIR / "defense.pln"
+DATA_DIR = TESTS_DIR / "data"
+EXPECTED_DIR = DATA_DIR / "expected"
+PLAYPOOL_DIR = DATA_DIR / "plays"
+OFFENSE_PLN = DATA_DIR / "O_60_06.pln"
+DEFENSE_PLN = DATA_DIR / "D_50_09.pln"
 
 
 @pytest.fixture

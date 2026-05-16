@@ -2,19 +2,16 @@ from __future__ import annotations
 
 import logging
 import shutil
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 import pytest
-from conftest import DEFENSE_DIR, DEFENSE_PLN, OFFENSE_DIR, OFFENSE_PLN, PLAYPOOL_DIR
+from conftest import DATA_DIR, DEFENSE_PLN, EXPECTED_DIR, OFFENSE_PLN, PLAYPOOL_DIR
 from fbpro98_gameplan import CustomPlay, Play, read_gameplan
-from fbpro98_play import PlayFile
-from pnfl_playpool import PlayPool, SpecialTeamsPlayRecord
+from fbpro98_play import read_play
+from pnfl_playpool import PlayPool, SpecialTeamsPlayRecord, read_play_pool
 
-from fbpro98_gameplanwriter.gameplan_writer import (
-    GamePlanWriter,
-    parse_sections,
-)
+from fbpro98_gameplanwriter.gameplan_writer import GamePlanWriter
 
 _pool: PlayPool | None = None
 
@@ -22,7 +19,7 @@ _pool: PlayPool | None = None
 def _get_pool() -> PlayPool:
     global _pool
     if _pool is None:
-        _pool = PlayPool.from_directory(PLAYPOOL_DIR)
+        _pool = read_play_pool(PLAYPOOL_DIR)
     return _pool
 
 
@@ -45,66 +42,35 @@ def _filled_names_upper(plays: Iterable[Play | None]) -> set[str]:
 
 
 def _get_offensive_names(count: int) -> list[str]:
-    pool = PlayPool.from_directory(PLAYPOOL_DIR)
+    pool = read_play_pool(PLAYPOOL_DIR)
     return [p.name for p in pool.offensive_plays[:count]]
 
 
 def _get_defensive_names(count: int) -> list[str]:
-    pool = PlayPool.from_directory(PLAYPOOL_DIR)
+    pool = read_play_pool(PLAYPOOL_DIR)
     return [p.name for p in pool.defensive_plays[:count]]
 
 
-# ---------- parse_sections ----------
+def find_play_slot_mismatches(
+    expected: Sequence[str],
+    actual: Sequence[Play | None],
+) -> list[str]:
+    """Return human-readable failure descriptions for slots whose play name doesn't match.
+
+    Each entry of `expected` is the expected play name for that slot, or "" to expect
+    an empty slot. Comparisons are case-insensitive. Returns an empty list if all match.
+    """
+    if len(expected) != len(actual):
+        return [f"Slot count mismatch: expected {len(expected)}, got {len(actual)}"]
+    mismatches: list[str] = []
+    for i, (exp_name, actual_play) in enumerate(zip(expected, actual, strict=True)):
+        actual_name = actual_play.name if actual_play else ""
+        if actual_name.upper() != (exp_name or "").upper():
+            mismatches.append(f"Slot {i}: expected {exp_name!r}, got {actual_name!r}")
+    return mismatches
 
 
-def test_parse_sections_no_markers_all_normal() -> None:
-    text = "AAA\nBBB\nCCC\n"
-    s = parse_sections(text)
-    assert s["normal"] == ["AAA", "BBB", "CCC"]
-    assert s["special"] == []
-
-
-def test_parse_sections_special_marker_switches_section() -> None:
-    text = "AAA\n=== Special ===\nXXX\nYYY\n"
-    s = parse_sections(text)
-    assert s["normal"] == ["AAA"]
-    assert s["special"] == ["XXX", "YYY"]
-
-
-def test_parse_sections_normal_marker_returns_to_normal() -> None:
-    text = "=== Special ===\nSP1\n=== Normal ===\nNRM\n"
-    s = parse_sections(text)
-    assert s["normal"] == ["NRM"]
-    assert s["special"] == ["SP1"]
-
-
-def test_parse_sections_blank_lines_preserved_in_section() -> None:
-    text = "AAA\n\nBBB\n=== Special ===\n\nXXX\n"
-    s = parse_sections(text)
-    assert s["normal"] == ["AAA", "", "BBB"]
-    assert s["special"] == ["", "XXX"]
-
-
-def test_parse_sections_markers_case_insensitive_and_whitespace_tolerant() -> None:
-    text = "  === NORMAL ===  \nAAA\n=== special ===\nXXX\n"
-    s = parse_sections(text)
-    assert s["normal"] == ["AAA"]
-    assert s["special"] == ["XXX"]
-
-
-def test_parse_sections_decorative_normal_marker_at_start() -> None:
-    text = "=== Normal ===\nAAA\nBBB\n=== Special ===\nXXX\n"
-    s = parse_sections(text)
-    assert s["normal"] == ["AAA", "BBB"]
-    assert s["special"] == ["XXX"]
-
-
-def test_parse_sections_empty_input() -> None:
-    s = parse_sections("")
-    assert s == {"normal": [], "special": []}
-
-
-# ---------- normal play behavior (preserved from prior test suite) ----------
+# ---------- normal play behavior ----------
 
 
 def test_blank_lines_produce_empty_slots(tmp_path: Path) -> None:
@@ -305,10 +271,10 @@ def _write_normal_from_file(src_pln: Path, plays_txt: Path, tmp_path: Path) -> P
     return pln_path
 
 
-def test_den_dgp1_update(tmp_path: Path) -> None:
-    src_pln = DEFENSE_DIR / "DEN-DGP1.pln"
-    plays_txt = DEFENSE_DIR / "DGP1.txt"
-    expected = DEFENSE_DIR / "expected" / "DEN-DGP1.pln"
+def test_defense_55_10a_update(tmp_path: Path) -> None:
+    src_pln = DATA_DIR / "D_55_10a.pln"
+    plays_txt = DATA_DIR / "D_55_10a.txt"
+    expected = EXPECTED_DIR / "D_47_10a.pln"
     pln_path = _write_normal_from_file(src_pln, plays_txt, tmp_path)
     reloaded = read_gameplan(pln_path)
     assert reloaded.is_defense
@@ -317,10 +283,10 @@ def test_den_dgp1_update(tmp_path: Path) -> None:
     _assert_matches_expected(pln_path, expected)
 
 
-def test_den_dgp2_update(tmp_path: Path) -> None:
-    src_pln = DEFENSE_DIR / "DEN-DGP2.pln"
-    plays_txt = DEFENSE_DIR / "DGP2.txt"
-    expected = DEFENSE_DIR / "expected" / "DEN-DGP2.pln"
+def test_defense_55_10b_update(tmp_path: Path) -> None:
+    src_pln = DATA_DIR / "D_55_10b.pln"
+    plays_txt = DATA_DIR / "D_55_10b.txt"
+    expected = EXPECTED_DIR / "D_47_10b.pln"
     pln_path = _write_normal_from_file(src_pln, plays_txt, tmp_path)
     reloaded = read_gameplan(pln_path)
     assert reloaded.is_defense
@@ -329,10 +295,10 @@ def test_den_dgp2_update(tmp_path: Path) -> None:
     _assert_matches_expected(pln_path, expected)
 
 
-def test_den_ogp1_update(tmp_path: Path) -> None:
-    src_pln = OFFENSE_DIR / "DEN-OGP1.pln"
-    plays_txt = OFFENSE_DIR / "OGP1.txt"
-    expected = OFFENSE_DIR / "expected" / "DEN-OGP1.pln"
+def test_offense_64_06a_update(tmp_path: Path) -> None:
+    src_pln = DATA_DIR / "O_64_06a.pln"
+    plays_txt = DATA_DIR / "O_64_06a.txt"
+    expected = EXPECTED_DIR / "O_64_06a.pln"
     pln_path = _write_normal_from_file(src_pln, plays_txt, tmp_path)
     reloaded = read_gameplan(pln_path)
     assert reloaded.is_offense
@@ -341,10 +307,10 @@ def test_den_ogp1_update(tmp_path: Path) -> None:
     _assert_matches_expected(pln_path, expected)
 
 
-def test_den_ogp2_update(tmp_path: Path) -> None:
-    src_pln = OFFENSE_DIR / "DEN-OGP2.pln"
-    plays_txt = OFFENSE_DIR / "OGP2.txt"
-    expected = OFFENSE_DIR / "expected" / "DEN-OGP2.pln"
+def test_offense_64_06b_update(tmp_path: Path) -> None:
+    src_pln = DATA_DIR / "O_64_06b.pln"
+    plays_txt = DATA_DIR / "O_64_06b.txt"
+    expected = EXPECTED_DIR / "O_64_06b.pln"
     pln_path = _write_normal_from_file(src_pln, plays_txt, tmp_path)
     reloaded = read_gameplan(pln_path)
     assert reloaded.is_offense
@@ -361,18 +327,33 @@ def _kickoff_slot_index() -> int:
     return 1
 
 
-def test_special_play_lands_in_correct_slot(tmp_path: Path) -> None:
-    pln_path = _copy_pln(OFFENSE_PLN, tmp_path)
+SPECIAL_FIXTURES = [
+    # (fixture_name, expected_special_category, "offense"/"defense")
+    ("BCFGPATD", 1, "defense"),  # Field Goal/PAT Defense — first slot, defensive
+    ("DETFGPAT", 1, "defense"),  # Field Goal/PAT Defense — first slot, defensive (alt)
+    ("AF-KO", 2, "offense"),  # Kickoff
+    ("CIN-PUNT", 3, "offense"),  # Punt
+    ("KCSQUIB", 10, "offense"),  # Squib Kick — last slot, offensive
+    ("BCSQUIBR", 10, "defense"),  # Squib Return — last slot, defensive
+]
+
+
+@pytest.mark.parametrize(("name", "special_category", "side"), SPECIAL_FIXTURES)
+def test_special_play_lands_in_correct_slot(tmp_path: Path, name: str, special_category: int, side: str) -> None:
+    src_pln = OFFENSE_PLN if side == "offense" else DEFENSE_PLN
+    pln_path = _copy_pln(src_pln, tmp_path)
     writer = _make_writer(pln_path)
-    writer.write(special_lines=["AF-KO"])
+    writer.write(special_lines=[name])
 
     reloaded = read_gameplan(pln_path)
     custom = reloaded.custom_special_plays
-    placed = custom[_kickoff_slot_index()]
+    expected_slot = special_category - 1
+    placed = custom[expected_slot]
     assert placed is not None
-    assert placed.name.upper() == "AF-KO"
+    assert placed.name.upper() == name.upper()
+    assert placed.special_category == special_category
     for i, play in enumerate(custom):
-        if i != _kickoff_slot_index():
+        if i != expected_slot:
             assert play is None
 
 
@@ -440,6 +421,19 @@ def test_offense_special_in_defense_gameplan_skipped_with_warning(
     assert all(p is None for p in reloaded.custom_special_plays)
 
 
+def test_defense_special_in_offense_gameplan_skipped_with_warning(
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    pln_path = _copy_pln(OFFENSE_PLN, tmp_path)
+    with caplog.at_level(logging.WARNING):
+        writer = _make_writer(pln_path)
+        writer.write(special_lines=["BCFGPATD"])
+    assert "defensive special play but gameplan is offensive" in caplog.text
+    reloaded = read_gameplan(pln_path)
+    assert all(p is None for p in reloaded.custom_special_plays)
+
+
 def test_duplicate_special_category_skipped_with_warning(
     tmp_path: Path,
     caplog: pytest.LogCaptureFixture,
@@ -451,7 +445,7 @@ def test_duplicate_special_category_skipped_with_warning(
     """
     pln_path = _copy_pln(OFFENSE_PLN, tmp_path)
     af_ko_path = PLAYPOOL_DIR / "Special" / "AF-KO.ply"
-    play_file = PlayFile.from_file(af_ko_path)
+    play_file = read_play(af_ko_path)
 
     pool = PlayPool(PLAYPOOL_DIR)
     rec_a = SpecialTeamsPlayRecord(name="AF-KO", play_file=play_file)
@@ -469,8 +463,9 @@ def test_duplicate_special_category_skipped_with_warning(
     assert filled == ["AF-KO"]
 
 
-def test_special_only_leaves_normal_unchanged(tmp_path: Path) -> None:
-    pln_path = _copy_pln(OFFENSE_DIR / "DEN-OGP1.pln", tmp_path)
+def test_partial_special_input_clears_remaining_special_preserves_normal(tmp_path: Path) -> None:
+    """Less than 10 specials: unsupplied slots cleared, normal section untouched."""
+    pln_path = _copy_pln(DATA_DIR / "O_64_06a.pln", tmp_path)
     original = read_gameplan(pln_path)
     original_normal_names = [(p.name if p is not None else None) for p in original.normal_plays]
 
@@ -483,10 +478,14 @@ def test_special_only_leaves_normal_unchanged(tmp_path: Path) -> None:
     placed = reloaded.custom_special_plays[_kickoff_slot_index()]
     assert placed is not None
     assert placed.name.upper() == "AF-KO"
+    for i, play in enumerate(reloaded.custom_special_plays):
+        if i != _kickoff_slot_index():
+            assert play is None, f"slot {i} should be cleared but contains {play!r}"
 
 
-def test_normal_only_leaves_special_unchanged(tmp_path: Path) -> None:
-    pln_path = _copy_pln(OFFENSE_DIR / "DEN-OGP1.pln", tmp_path)
+def test_partial_normal_input_clears_remaining_normal_preserves_special(tmp_path: Path) -> None:
+    """Less than 64 normals: unsupplied slots cleared, special section untouched."""
+    pln_path = _copy_pln(DATA_DIR / "O_64_06a.pln", tmp_path)
     original = read_gameplan(pln_path)
     original_special_names = [(p.name if p is not None else None) for p in original.custom_special_plays]
 
@@ -497,6 +496,80 @@ def test_normal_only_leaves_special_unchanged(tmp_path: Path) -> None:
     reloaded = read_gameplan(pln_path)
     reloaded_special_names = [(p.name if p is not None else None) for p in reloaded.custom_special_plays]
     assert reloaded_special_names == original_special_names
+    expected_normal = list(names) + [""] * (64 - len(names))
+    failures = find_play_slot_mismatches(expected_normal, reloaded.normal_plays)
+    assert not failures, "\n" + "\n".join(failures)
+
+
+def test_full_64_normal_input_replaces_normal_preserves_special(tmp_path: Path) -> None:
+    """Full 64-normal write replaces all normal slots and leaves special section untouched."""
+    pln_path = _copy_pln(DATA_DIR / "O_64_06a.pln", tmp_path)
+    original = read_gameplan(pln_path)
+    original_special_names = [(p.name if p is not None else None) for p in original.custom_special_plays]
+
+    names = _get_offensive_names(64)
+    writer = _make_writer(pln_path)
+    writer.write(normal_lines=names)
+
+    reloaded = read_gameplan(pln_path)
+    failures = find_play_slot_mismatches(names, reloaded.normal_plays)
+    assert not failures, "\n" + "\n".join(failures)
+    reloaded_special_names = [(p.name if p is not None else None) for p in reloaded.custom_special_plays]
+    assert reloaded_special_names == original_special_names
+
+
+def test_full_10_special_input_replaces_special_preserves_normal(tmp_path: Path) -> None:
+    """Full 10-special write fills all 10 slots and leaves normal section untouched."""
+    pln_path = _copy_pln(DATA_DIR / "O_64_06a.pln", tmp_path)
+    original = read_gameplan(pln_path)
+    original_normal_names = [(p.name if p is not None else None) for p in original.normal_plays]
+
+    # One offensive special play per category 1..10 — only 6 distinct categories
+    # exist for offense, so we can fill at most 6 distinct categories. Use the
+    # set of plays the fixture pool has indexed.
+    pool = _get_pool()
+    special_names: list[str] = []
+    seen_categories: set[int] = set()
+    for record in pool.special_teams_plays:
+        if not record.play_file.is_offensive:
+            continue
+        cat = record.play_file.special_category
+        if cat in seen_categories:
+            continue
+        seen_categories.add(cat)
+        special_names.append(record.name)
+    # Sanity: writer accepts up to 10; fixture pool offers fewer distinct
+    # categories so use what exists. The test still proves "fill many slots,
+    # normal preserved."
+    assert special_names, "Fixture pool has no offensive special plays"
+
+    writer = _make_writer(pln_path)
+    writer.write(special_lines=special_names)
+
+    reloaded = read_gameplan(pln_path)
+    reloaded_normal_names = [(p.name if p is not None else None) for p in reloaded.normal_plays]
+    assert reloaded_normal_names == original_normal_names
+
+    placed_count = sum(1 for p in reloaded.custom_special_plays if p is not None)
+    assert placed_count == len(special_names)
+
+
+def test_full_normal_and_special_input_replaces_both(tmp_path: Path) -> None:
+    """Combined 64-normal + special write applies both sections."""
+    pln_path = _copy_pln(DATA_DIR / "O_64_06a.pln", tmp_path)
+    names = _get_offensive_names(64)
+    writer = _make_writer(pln_path)
+    writer.write(normal_lines=names, special_lines=["AF-KO"])
+
+    reloaded = read_gameplan(pln_path)
+    failures = find_play_slot_mismatches(names, reloaded.normal_plays)
+    assert not failures, "\n" + "\n".join(failures)
+    placed = reloaded.custom_special_plays[_kickoff_slot_index()]
+    assert placed is not None
+    assert placed.name.upper() == "AF-KO"
+    for i, play in enumerate(reloaded.custom_special_plays):
+        if i != _kickoff_slot_index():
+            assert play is None
 
 
 def test_both_normal_and_special_applied_together(tmp_path: Path) -> None:
@@ -514,7 +587,7 @@ def test_both_normal_and_special_applied_together(tmp_path: Path) -> None:
 
 
 def test_empty_special_list_clears_all_custom_special_slots(tmp_path: Path) -> None:
-    pln_path = _copy_pln(OFFENSE_DIR / "DEN-OGP1.pln", tmp_path)
+    pln_path = _copy_pln(DATA_DIR / "O_64_06a.pln", tmp_path)
     pre = read_gameplan(pln_path)
     assert any(p is not None for p in pre.custom_special_plays)
 
@@ -534,3 +607,29 @@ def test_special_play_filename_uses_pnfl_prefix(tmp_path: Path) -> None:
     assert isinstance(play, CustomPlay)
     assert play.filename.startswith("PNFL\\")
     assert play.filename.endswith("AF-KO.ply")
+
+
+def test_special_input_clears_unspecified_slots(tmp_path: Path) -> None:
+    """Writer treats the special list as the full state — slots not specified should be cleared."""
+    pln_path = _copy_pln(OFFENSE_PLN, tmp_path)  # offense.pln has 6 custom special plays filled
+    writer = _make_writer(pln_path)
+    writer.write(special_lines=["AF-KO"])
+
+    reloaded = read_gameplan(pln_path)
+    expected = [""] * 10
+    expected[_kickoff_slot_index()] = "AF-KO"
+    failures = find_play_slot_mismatches(expected, reloaded.custom_special_plays)
+    assert not failures, "\n" + "\n".join(failures)
+
+
+def test_partial_normal_input_clears_remaining_slots(tmp_path: Path) -> None:
+    """Writer treats the normal list as the full state — slots beyond the input should be cleared."""
+    pln_path = _copy_pln(OFFENSE_PLN, tmp_path)  # offense.pln has 60 normal plays filled
+    names = _get_offensive_names(48)
+    writer = _make_writer(pln_path)
+    writer.write(normal_lines=names)
+
+    reloaded = read_gameplan(pln_path)
+    expected = list(names) + [""] * (64 - 48)
+    failures = find_play_slot_mismatches(expected, reloaded.normal_plays)
+    assert not failures, "\n" + "\n".join(failures)

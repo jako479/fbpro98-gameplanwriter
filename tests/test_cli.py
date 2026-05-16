@@ -177,15 +177,14 @@ def test_main_writes_both_from_separate_files(tmp_path: Path) -> None:
 
 
 def test_main_combined_file_for_both_flags(tmp_path: Path) -> None:
-    """Same file path for both flags: parsed once, sections dispatched."""
+    """Same file path for both flags: read once, lines [0:64]→normal, [64:74]→special."""
     pln_path = tmp_path / "offense.pln"
     shutil.copy2(OFFENSE_PLN, pln_path)
 
+    normal_lines = ["OR45RL01"] + [""] * 63
+    special_lines = ["", "AF-KO"] + [""] * 8
     combined = tmp_path / "combined.txt"
-    combined.write_text(
-        "=== Normal ===\nOR45RL01\n=== Special ===\nAF-KO\n",
-        encoding="utf-8",
-    )
+    combined.write_text("\n".join(normal_lines + special_lines) + "\n", encoding="utf-8")
 
     rc = main(
         [
@@ -203,40 +202,67 @@ def test_main_combined_file_for_both_flags(tmp_path: Path) -> None:
     reloaded = read_gameplan(pln_path)
     assert reloaded.normal_plays[0] is not None
     assert reloaded.normal_plays[0].name == "OR45RL01"
+    assert all(p is None for p in reloaded.normal_plays[1:])
     placed = reloaded.custom_special_plays[1]
     assert placed is not None
     assert placed.name.upper() == "AF-KO"
+    assert all(p is None for i, p in enumerate(reloaded.custom_special_plays) if i != 1)
 
 
-def test_main_only_normal_flag_with_combined_file_ignores_special_section(
-    tmp_path: Path,
-) -> None:
+def test_main_shared_source_wrong_line_count_raises(tmp_path: Path) -> None:
     pln_path = tmp_path / "offense.pln"
     shutil.copy2(OFFENSE_PLN, pln_path)
-    pre_specials = [(p.name if p else None) for p in read_gameplan(pln_path).custom_special_plays]
+    short = tmp_path / "short.txt"
+    short.write_text("OR45RL01\n", encoding="utf-8")
 
-    combined = tmp_path / "combined.txt"
-    combined.write_text(
-        "OR45RL01\n=== Special ===\nAF-KO\n",
-        encoding="utf-8",
-    )
+    with pytest.raises(ValueError, match="Shared source must have exactly 74 lines"):
+        main(
+            [
+                str(pln_path),
+                "--normal-plays",
+                str(short),
+                "--special-plays",
+                str(short),
+                "--play-path",
+                str(PLAYPOOL_DIR),
+            ]
+        )
 
-    rc = main(
-        [
-            str(pln_path),
-            "--normal-plays",
-            str(combined),
-            "--play-path",
-            str(PLAYPOOL_DIR),
-        ]
-    )
-    assert rc == 0
 
-    reloaded = read_gameplan(pln_path)
-    assert reloaded.normal_plays[0] is not None
-    assert reloaded.normal_plays[0].name == "OR45RL01"
-    post_specials = [(p.name if p else None) for p in reloaded.custom_special_plays]
-    assert post_specials == pre_specials
+def test_main_normal_plays_over_max_raises(tmp_path: Path) -> None:
+    pln_path = tmp_path / "offense.pln"
+    shutil.copy2(OFFENSE_PLN, pln_path)
+    too_long = tmp_path / "too_long.txt"
+    too_long.write_text("OR45RL01\n" * 65, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="--normal-plays source has 65 lines, max is 64"):
+        main(
+            [
+                str(pln_path),
+                "--normal-plays",
+                str(too_long),
+                "--play-path",
+                str(PLAYPOOL_DIR),
+            ]
+        )
+
+
+def test_main_special_plays_over_max_raises(tmp_path: Path) -> None:
+    pln_path = tmp_path / "offense.pln"
+    shutil.copy2(OFFENSE_PLN, pln_path)
+    too_long = tmp_path / "too_long.txt"
+    too_long.write_text("AF-KO\n" * 11, encoding="utf-8")
+
+    with pytest.raises(ValueError, match="--special-plays source has 11 lines, max is 10"):
+        main(
+            [
+                str(pln_path),
+                "--special-plays",
+                str(too_long),
+                "--play-path",
+                str(PLAYPOOL_DIR),
+            ]
+        )
 
 
 # ---------- main: stdin input ----------
@@ -298,7 +324,9 @@ def test_main_reads_combined_stdin_via_both_dashes(
     pln_path = tmp_path / "offense.pln"
     shutil.copy2(OFFENSE_PLN, pln_path)
 
-    combined = "=== Normal ===\nOR45RL01\n=== Special ===\nAF-KO\n"
+    normal_lines = ["OR45RL01"] + [""] * 63
+    special_lines = ["", "AF-KO"] + [""] * 8
+    combined = "\n".join(normal_lines + special_lines) + "\n"
     monkeypatch.setattr("sys.stdin", io.StringIO(combined))
 
     rc = main(
@@ -385,31 +413,169 @@ def test_main_normal_from_file_special_from_stdin(
     assert placed.name.upper() == "AF-KO"
 
 
-def test_main_combined_stdin_with_only_normal_flag_drops_special(
+# ---------- main: header-bearing input rejection ----------
+#
+# The reader's default-mode (with `=== Normal ===` / `=== Special ===` headers)
+# is human-only and is not consumable by the writer. Piping it in produces
+# enough lines to trip the writer's per-flag max-line check, which is the
+# correct failure mode (loud, deterministic, and the .pln stays untouched).
+
+
+def _default_mode_offense_stdout() -> str:
+    """The reader's default-mode output for offense.pln (77 lines: 64 + 1 + 1 + 10 + headers)."""
+    from fbpro98_gameplanreader.cli import main as reader_main
+    import io as _io
+    import sys as _sys
+
+    buf = _io.StringIO()
+    saved = _sys.stdout
+    _sys.stdout = buf
+    try:
+        reader_main([str(OFFENSE_PLN)])
+    finally:
+        _sys.stdout = saved
+    return buf.getvalue()
+
+
+def test_main_stdin_with_header_rejected_for_normal_plays(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`pnfl read-gameplan src | pnfl write-gameplan dst --normal-plays -` errors."""
+    pln_path = tmp_path / "offense.pln"
+    shutil.copy2(OFFENSE_PLN, pln_path)
+
+    monkeypatch.setattr("sys.stdin", io.StringIO(_default_mode_offense_stdout()))
+    with pytest.raises(ValueError, match="--normal-plays source has .* lines, max is 64"):
+        main([str(pln_path), "--normal-plays", "-", "--play-path", str(PLAYPOOL_DIR)])
+
+
+def test_main_stdin_with_header_rejected_for_special_plays(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     pln_path = tmp_path / "offense.pln"
     shutil.copy2(OFFENSE_PLN, pln_path)
-    pre_specials = [(p.name if p else None) for p in read_gameplan(pln_path).custom_special_plays]
 
-    monkeypatch.setattr(
-        "sys.stdin",
-        io.StringIO("=== Normal ===\nOR45RL01\n=== Special ===\nAF-KO\n"),
-    )
+    monkeypatch.setattr("sys.stdin", io.StringIO(_default_mode_offense_stdout()))
+    with pytest.raises(ValueError, match="--special-plays source has .* lines, max is 10"):
+        main([str(pln_path), "--special-plays", "-", "--play-path", str(PLAYPOOL_DIR)])
 
-    rc = main(
-        [
-            str(pln_path),
-            "--normal-plays",
-            "-",
-            "--play-path",
-            str(PLAYPOOL_DIR),
-        ]
-    )
-    assert rc == 0
-    reloaded = read_gameplan(pln_path)
-    assert reloaded.normal_plays[0] is not None
-    assert reloaded.normal_plays[0].name == "OR45RL01"
-    post_specials = [(p.name if p else None) for p in reloaded.custom_special_plays]
-    assert post_specials == pre_specials
+
+def test_main_stdin_with_header_rejected_for_shared_source(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Both flags as `-` reads stdin once; with-header output has 77 lines, not 74."""
+    pln_path = tmp_path / "offense.pln"
+    shutil.copy2(OFFENSE_PLN, pln_path)
+
+    monkeypatch.setattr("sys.stdin", io.StringIO(_default_mode_offense_stdout()))
+    with pytest.raises(ValueError, match="Shared source must have exactly 74 lines"):
+        main(
+            [
+                str(pln_path),
+                "--normal-plays",
+                "-",
+                "--special-plays",
+                "-",
+                "--play-path",
+                str(PLAYPOOL_DIR),
+            ]
+        )
+
+
+def test_main_normal_with_header_special_without_header_rejected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Normal input has a leading header line (65 lines total) — over normal max of 64."""
+    pln_path = tmp_path / "offense.pln"
+    shutil.copy2(OFFENSE_PLN, pln_path)
+
+    headered_normal = "=== Normal ===\n" + "OR45RL01\n" * 64
+    spec_txt = tmp_path / "s.txt"
+    spec_txt.write_text("AF-KO\n", encoding="utf-8")
+    monkeypatch.setattr("sys.stdin", io.StringIO(headered_normal))
+
+    with pytest.raises(ValueError, match="--normal-plays source has 65 lines, max is 64"):
+        main(
+            [
+                str(pln_path),
+                "--normal-plays",
+                "-",
+                "--special-plays",
+                str(spec_txt),
+                "--play-path",
+                str(PLAYPOOL_DIR),
+            ]
+        )
+
+
+def test_main_normal_without_header_special_with_header_rejected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Special input has a leading header line (11 lines total) — over special max of 10."""
+    pln_path = tmp_path / "offense.pln"
+    shutil.copy2(OFFENSE_PLN, pln_path)
+
+    normal_txt = tmp_path / "n.txt"
+    normal_txt.write_text("OR45RL01\n", encoding="utf-8")
+    headered_special = "=== Special ===\n" + "AF-KO\n" * 10
+    monkeypatch.setattr("sys.stdin", io.StringIO(headered_special))
+
+    with pytest.raises(ValueError, match="--special-plays source has 11 lines, max is 10"):
+        main(
+            [
+                str(pln_path),
+                "--normal-plays",
+                str(normal_txt),
+                "--special-plays",
+                "-",
+                "--play-path",
+                str(PLAYPOOL_DIR),
+            ]
+        )
+
+
+# ---------- main: play pool error handling ----------
+
+
+def test_main_invalid_play_path_raises_file_not_found(tmp_path: Path) -> None:
+    pln_path = tmp_path / "offense.pln"
+    shutil.copy2(OFFENSE_PLN, pln_path)
+    plays_txt = tmp_path / "plays.txt"
+    plays_txt.write_text("OR45RL01\n", encoding="utf-8")
+
+    bad_path = tmp_path / "does_not_exist"
+    with pytest.raises(FileNotFoundError, match="Play pool path does not exist"):
+        main(
+            [
+                str(pln_path),
+                "--normal-plays",
+                str(plays_txt),
+                "--play-path",
+                str(bad_path),
+            ]
+        )
+
+
+def test_main_empty_play_path_raises_value_error(tmp_path: Path) -> None:
+    pln_path = tmp_path / "offense.pln"
+    shutil.copy2(OFFENSE_PLN, pln_path)
+    plays_txt = tmp_path / "plays.txt"
+    plays_txt.write_text("OR45RL01\n", encoding="utf-8")
+
+    empty_pool = tmp_path / "empty_pool"
+    empty_pool.mkdir()
+    with pytest.raises(ValueError, match="contains no plays"):
+        main(
+            [
+                str(pln_path),
+                "--normal-plays",
+                str(plays_txt),
+                "--play-path",
+                str(empty_pool),
+            ]
+        )

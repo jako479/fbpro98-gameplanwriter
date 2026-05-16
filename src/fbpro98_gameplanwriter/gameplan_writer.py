@@ -18,6 +18,7 @@ from pnfl_playpool import (
     OffensivePlayRecord,
     PlayPool,
     SpecialTeamsPlayRecord,
+    read_play_pool,
 )
 
 from fbpro98_gameplanwriter.config import Config
@@ -28,41 +29,12 @@ StrPath = str | PathLike[str]
 
 MAX_NORMAL_PLAYS = 64
 SLOTS_PER_ROW = 4
-SPECIAL_CATEGORIES = 10
-
-NORMAL_HEADER = "=== normal ==="
-SPECIAL_HEADER = "=== special ==="
 
 
 def _slot_label(slot: int) -> str:
     row = slot // SLOTS_PER_ROW + 1
     col = slot % SLOTS_PER_ROW + 1
     return f"{row}-{col}"
-
-
-def parse_sections(text: str, *, default_section: str = "normal") -> dict[str, list[str]]:
-    """Split a combined-format play list into normal and special line groups.
-
-    Lines `=== Normal ===` and `=== Special ===` (case-insensitive, surrounding
-    whitespace tolerated) act as section markers. Lines that appear before any
-    marker fall into `default_section` ('normal' or 'special'). Marker lines
-    themselves are dropped; all other lines (including blanks) are preserved in
-    their section's list.
-    """
-    if default_section not in ("normal", "special"):
-        raise ValueError(f"default_section must be 'normal' or 'special', got {default_section!r}")
-    sections: dict[str, list[str]] = {"normal": [], "special": []}
-    current = default_section
-    for line in text.splitlines():
-        marker = line.strip().lower()
-        if marker == NORMAL_HEADER:
-            current = "normal"
-            continue
-        if marker == SPECIAL_HEADER:
-            current = "special"
-            continue
-        sections[current].append(line)
-    return sections
 
 
 def _build_custom_play(record: object, play_pool_root: Path) -> CustomPlay:
@@ -95,7 +67,12 @@ class GamePlanWriter:
         config: Config,
         gameplan_path: StrPath,
     ) -> GamePlanWriter:
-        play_pool = PlayPool.from_directory(config.play_path)
+        play_path = Path(config.play_path)
+        if not play_path.is_dir():
+            raise FileNotFoundError(f"Play pool path does not exist or is not a directory: {config.play_path}")
+        play_pool = read_play_pool(config.play_path)
+        if not (play_pool.offensive_plays or play_pool.defensive_plays or play_pool.special_teams_plays):
+            raise ValueError(f"Play pool at {config.play_path} contains no plays")
         return cls(play_pool, gameplan_path)
 
     def write(
@@ -150,27 +127,28 @@ class GamePlanWriter:
         gameplan: GamePlan,
         lines: Sequence[str],
     ) -> GamePlan:
-        """Place special plays into the 10 special-teams slots, keyed by `special_category`.
+        """Resolve special-play names from `lines` and place them in the gameplan.
 
-        Each play's `special_category` (1..10) determines its slot — input order
-        only matters for tie-breaking when two lines target the same category
-        (the first wins; subsequent are skipped with a warning). Empty lines,
-        duplicates, plays not in the pool, plays of the wrong offensive/defensive
-        type, and out-of-range categories are skipped with a warning. Returns a
-        new GamePlan; the input is not mutated.
+        Empty lines, duplicates, plays not in the pool, plays of the wrong
+        offensive/defensive type, plays whose category collides with another
+        already-placed play, and out-of-range categories are skipped with a
+        warning. The model places each accepted play in its own
+        `special_category` slot; categories not covered are cleared. Returns
+        a new GamePlan; the input is not mutated.
         """
-        slots: list[CustomPlay | None] = [None] * SPECIAL_CATEGORIES
         seen_names: dict[str, int] = {}  # upper name -> special_category
+        seen_categories: set[int] = set()
+        plays: list[CustomPlay] = []
         for line_index, line in enumerate(lines):
             name = line.strip()
             if not name:
                 continue
-            entry = self._resolve_special_line(line_index, name, gameplan, seen_names, slots)
+            entry = self._resolve_special_line(line_index, name, gameplan, seen_names, seen_categories)
             if entry is not None:
-                cat = entry.special_category
-                slots[cat - 1] = entry
-                seen_names[name.upper()] = cat
-        return gameplan.with_custom_special_plays(slots)
+                plays.append(entry)
+                seen_names[name.upper()] = entry.special_category
+                seen_categories.add(entry.special_category)
+        return gameplan.with_custom_special_plays(plays)
 
     def _resolve_normal_line(
         self,
@@ -223,7 +201,7 @@ class GamePlanWriter:
         name: str,
         gameplan: GamePlan,
         seen_names: dict[str, int],
-        slots: list[CustomPlay | None],
+        seen_categories: set[int],
     ) -> CustomPlay | None:
         upper_name = name.upper()
         line_no = line_index + 1
@@ -251,14 +229,6 @@ class GamePlanWriter:
             )
             return None
         cat = record.special_category
-        if cat < 1 or cat > SPECIAL_CATEGORIES:
-            logger.warning(
-                "Special play '%s' at line %d has out-of-range special_category=%d, skipping",
-                name,
-                line_no,
-                cat,
-            )
-            return None
         if gameplan.is_offense and not record.play_file.is_offensive:
             logger.warning(
                 "Play '%s' at line %d is a defensive special play but gameplan is offensive, skipping",
@@ -273,7 +243,7 @@ class GamePlanWriter:
                 line_no,
             )
             return None
-        if slots[cat - 1] is not None:
+        if cat in seen_categories:
             logger.warning(
                 "Special play '%s' at line %d targets special category %d, already filled by another play, skipping",
                 name,
