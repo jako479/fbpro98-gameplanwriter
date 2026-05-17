@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "fbpro98-gameplanwriter"
 version = "0.1.0"
-description = "Updates a Front Page Sports Football Pro '98 game plan (.pln) from a list of plays"
+description = "Updates a Front Page Sports Football Pro '98 game plan (.pln) from a list of plays."
 authors = [{ name = "Brian Jacobs" }]
 readme = "README.md"
 license = "MIT"
