@@ -71,7 +71,7 @@ The reader's default-mode (with-headers) output is **not** compatible with the w
 
 ## Testing
 
-- `tests/test_gameplan_writer.py` — `GamePlanWriter.apply_normal_plays` / `apply_special_plays` semantics, with byte-compare against game-produced expected `.pln` files in `tests/fixtures/{offense,defense}/expected/`
+- `tests/test_gameplan_writer.py` — `GamePlanWriter.apply_normal_plays` / `apply_special_plays` semantics, with byte-compare against game-produced expected `.pln` files in `tests/data/expected/`
 - `tests/test_cli.py` — argparse contract, source dispatch (file/stdin/shared), config wiring
 
 The expected `.pln` fixtures are produced by FbPro '98 itself and are the authoritative ground truth — any test that writes bytes ultimately compares to one of these.
