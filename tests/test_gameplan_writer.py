@@ -181,7 +181,7 @@ def test_special_teams_play_in_normal_defensive_input_raises(tmp_path: Path) -> 
 def test_duplicate_in_65_plays_raises(tmp_path: Path) -> None:
     pln_path = _copy_pln(OFFENSE_PLN, tmp_path)
     names = _get_offensive_names(66)
-    lines = [names[0]] + [names[0]] + names[2:64] + [names[64]]
+    lines = [names[0], names[0], *names[2:64], names[64]]
     assert len(lines) == 65
 
     with pytest.raises(InvalidPlayInputError) as exc_info:

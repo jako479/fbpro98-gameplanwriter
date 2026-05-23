@@ -423,9 +423,10 @@ def test_main_normal_from_file_special_from_stdin(
 
 def _default_mode_offense_stdout() -> str:
     """The reader's default-mode output for offense.pln (77 lines: 64 + 1 + 1 + 10 + headers)."""
-    from fbpro98_gameplanreader.cli import main as reader_main
     import io as _io
     import sys as _sys
+
+    from fbpro98_gameplanreader.cli import main as reader_main
 
     buf = _io.StringIO()
     saved = _sys.stdout
@@ -446,7 +447,7 @@ def test_main_stdin_with_header_rejected_for_normal_plays(
     shutil.copy2(OFFENSE_PLN, pln_path)
 
     monkeypatch.setattr("sys.stdin", io.StringIO(_default_mode_offense_stdout()))
-    with pytest.raises(ValueError, match="--normal-plays source has .* lines, max is 64"):
+    with pytest.raises(ValueError, match=r"--normal-plays source has .* lines, max is 64"):
         main([str(pln_path), "--normal-plays", "-", "--play-path", str(PLAYPOOL_DIR)])
 
 
@@ -458,7 +459,7 @@ def test_main_stdin_with_header_rejected_for_special_plays(
     shutil.copy2(OFFENSE_PLN, pln_path)
 
     monkeypatch.setattr("sys.stdin", io.StringIO(_default_mode_offense_stdout()))
-    with pytest.raises(ValueError, match="--special-plays source has .* lines, max is 10"):
+    with pytest.raises(ValueError, match=r"--special-plays source has .* lines, max is 10"):
         main([str(pln_path), "--special-plays", "-", "--play-path", str(PLAYPOOL_DIR)])
 
 

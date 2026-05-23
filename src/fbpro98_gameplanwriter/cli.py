@@ -26,7 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
             "    contain exactly 74 lines: lines 0-63 -> normal, lines 64-73 -> special.\n"
             "\n"
             "Pipeline-friendly examples:\n"
-            "  pnfl read-gameplan src.pln --normal-out - --special-out - | pnfl write-gameplan dest.pln --normal-plays - --special-plays -\n"
+            "  pnfl read-gameplan src.pln --normal-out - --special-out - | pnfl write-gameplan dest.pln --normal-plays - --special-plays -\n"  # noqa: E501
             "  pnfl read-gameplan src.pln --normal-out - | pnfl write-gameplan dest.pln --normal-plays -\n"
         ),
     )
