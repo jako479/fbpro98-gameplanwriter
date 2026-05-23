@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import shutil
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -11,7 +10,7 @@ from fbpro98_gameplan import CustomPlay, Play, read_gameplan
 from fbpro98_play import read_play
 from pnfl_playpool import PlayPool, SpecialTeamsPlayRecord, read_play_pool
 
-from fbpro98_gameplanwriter.gameplan_writer import GamePlanWriter
+from fbpro98_gameplanwriter.gameplan_writer import GamePlanWriter, InvalidPlayInputError
 
 _pool: PlayPool | None = None
 
@@ -117,20 +116,15 @@ def test_lines_beyond_64_ignored_with_blanks(tmp_path: Path) -> None:
         assert name.upper() not in reloaded_names
 
 
-def test_unknown_play_name_skipped_with_warning(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_unknown_play_name_raises(tmp_path: Path) -> None:
     pln_path = _copy_pln(OFFENSE_PLN, tmp_path)
+    original_bytes = pln_path.read_bytes()
 
-    with caplog.at_level(logging.WARNING):
-        writer = _make_writer(pln_path)
-        writer.write(normal_lines=["TOTALLYNOTAPLAY"])
+    with pytest.raises(InvalidPlayInputError) as exc_info:
+        _make_writer(pln_path).write(normal_lines=["TOTALLYNOTAPLAY"])
 
-    assert "Play not found" in caplog.text
-    assert "TOTALLYNOTAPLAY" in caplog.text
-    reloaded = read_gameplan(pln_path)
-    assert _filled_count(reloaded.normal_plays) == 0
+    assert any("Play not found" in v and "TOTALLYNOTAPLAY" in v for v in exc_info.value.violations)
+    assert pln_path.read_bytes() == original_bytes
 
 
 def test_case_insensitive_play_names(tmp_path: Path) -> None:
@@ -144,104 +138,71 @@ def test_case_insensitive_play_names(tmp_path: Path) -> None:
     assert _filled_count(reloaded.normal_plays) == 1
 
 
-def test_defensive_play_in_offensive_gameplan_skipped_with_warning(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_defensive_play_in_offensive_gameplan_raises(tmp_path: Path) -> None:
     pln_path = _copy_pln(OFFENSE_PLN, tmp_path)
     defensive_names = _get_defensive_names(1)
+    original_bytes = pln_path.read_bytes()
 
-    with caplog.at_level(logging.WARNING):
-        writer = _make_writer(pln_path)
-        writer.write(normal_lines=defensive_names)
+    with pytest.raises(InvalidPlayInputError) as exc_info:
+        _make_writer(pln_path).write(normal_lines=defensive_names)
 
-    assert "defensive play" in caplog.text
-    reloaded = read_gameplan(pln_path)
-    assert _filled_count(reloaded.normal_plays) == 0
+    assert any("defensive play" in v for v in exc_info.value.violations)
+    assert pln_path.read_bytes() == original_bytes
 
 
-def test_offensive_play_in_defensive_gameplan_skipped_with_warning(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_offensive_play_in_defensive_gameplan_raises(tmp_path: Path) -> None:
     pln_path = _copy_pln(DEFENSE_PLN, tmp_path)
     offensive_names = _get_offensive_names(1)
 
-    with caplog.at_level(logging.WARNING):
-        writer = _make_writer(pln_path)
-        writer.write(normal_lines=offensive_names)
+    with pytest.raises(InvalidPlayInputError) as exc_info:
+        _make_writer(pln_path).write(normal_lines=offensive_names)
 
-    assert "offensive play" in caplog.text
-    reloaded = read_gameplan(pln_path)
-    assert _filled_count(reloaded.normal_plays) == 0
+    assert any("offensive play" in v for v in exc_info.value.violations)
 
 
-def test_special_teams_play_skipped_in_normal_offensive_input(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_special_teams_play_in_normal_offensive_input_raises(tmp_path: Path) -> None:
     pln_path = _copy_pln(OFFENSE_PLN, tmp_path)
 
-    with caplog.at_level(logging.WARNING):
-        writer = _make_writer(pln_path)
-        writer.write(normal_lines=["AF-KO"])
+    with pytest.raises(InvalidPlayInputError) as exc_info:
+        _make_writer(pln_path).write(normal_lines=["AF-KO"])
 
-    assert "special teams play" in caplog.text
-    reloaded = read_gameplan(pln_path)
-    assert _filled_count(reloaded.normal_plays) == 0
+    assert any("special teams play" in v for v in exc_info.value.violations)
 
 
-def test_special_teams_play_skipped_in_normal_defensive_input(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_special_teams_play_in_normal_defensive_input_raises(tmp_path: Path) -> None:
     pln_path = _copy_pln(DEFENSE_PLN, tmp_path)
 
-    with caplog.at_level(logging.WARNING):
-        writer = _make_writer(pln_path)
-        writer.write(normal_lines=["AF-KO"])
+    with pytest.raises(InvalidPlayInputError) as exc_info:
+        _make_writer(pln_path).write(normal_lines=["AF-KO"])
 
-    assert "special teams play" in caplog.text
-    reloaded = read_gameplan(pln_path)
-    assert _filled_count(reloaded.normal_plays) == 0
+    assert any("special teams play" in v for v in exc_info.value.violations)
 
 
-def test_65_plays_with_duplicate_does_not_promote_line_65(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_duplicate_in_65_plays_raises(tmp_path: Path) -> None:
     pln_path = _copy_pln(OFFENSE_PLN, tmp_path)
     names = _get_offensive_names(66)
     lines = [names[0]] + [names[0]] + names[2:64] + [names[64]]
     assert len(lines) == 65
 
-    with caplog.at_level(logging.WARNING):
-        writer = _make_writer(pln_path)
-        writer.write(normal_lines=lines)
+    with pytest.raises(InvalidPlayInputError) as exc_info:
+        _make_writer(pln_path).write(normal_lines=lines)
 
-    assert "Duplicate play" in caplog.text
-    reloaded = read_gameplan(pln_path)
-    assert _filled_count(reloaded.normal_plays) == 63
-    reloaded_names = _filled_names_upper(reloaded.normal_plays)
-    assert names[64].upper() not in reloaded_names
+    assert any("Duplicate play" in v for v in exc_info.value.violations)
 
 
-def test_duplicate_normal_play_skipped_with_warning(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_duplicate_normal_play_raises(tmp_path: Path) -> None:
     pln_path = _copy_pln(OFFENSE_PLN, tmp_path)
     names = _get_offensive_names(1)
 
-    with caplog.at_level(logging.WARNING):
-        writer = _make_writer(pln_path)
-        writer.write(normal_lines=[names[0], names[0], names[0]])
+    with pytest.raises(InvalidPlayInputError) as exc_info:
+        _make_writer(pln_path).write(normal_lines=[names[0], names[0], names[0]])
 
-    assert "Duplicate play" in caplog.text
-    assert "slot 1-2 (line 2)" in caplog.text
-    assert "already at slot 1-1 (line 1)" in caplog.text
-    reloaded = read_gameplan(pln_path)
-    assert _filled_count(reloaded.normal_plays) == 1
+    violations = exc_info.value.violations
+    assert any(
+        "Duplicate play" in v and "slot 1-2 (line 2)" in v and "already at slot 1-1 (line 1)" in v for v in violations
+    )
+    # Two duplicate violations expected (lines 2 and 3 both duplicate line 1).
+    assert sum(1 for v in violations if "Duplicate play" in v) == 2
 
 
 # ---------- byte-compare integration (normal-only, special preserved) ----------
@@ -368,76 +329,52 @@ def test_special_blank_lines_skipped(tmp_path: Path) -> None:
     assert custom[_kickoff_slot_index()] is not None
 
 
-def test_special_unknown_name_skipped_with_warning(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_special_unknown_name_raises(tmp_path: Path) -> None:
     pln_path = _copy_pln(OFFENSE_PLN, tmp_path)
-    with caplog.at_level(logging.WARNING):
-        writer = _make_writer(pln_path)
-        writer.write(special_lines=["NOSUCHKICK"])
-    assert "Special play not found" in caplog.text
-    assert "NOSUCHKICK" in caplog.text
-    reloaded = read_gameplan(pln_path)
-    assert all(p is None for p in reloaded.custom_special_plays)
+
+    with pytest.raises(InvalidPlayInputError) as exc_info:
+        _make_writer(pln_path).write(special_lines=["NOSUCHKICK"])
+
+    assert any("Special play not found" in v and "NOSUCHKICK" in v for v in exc_info.value.violations)
 
 
-def test_normal_play_in_special_input_skipped_with_warning(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_normal_play_in_special_input_raises(tmp_path: Path) -> None:
     pln_path = _copy_pln(OFFENSE_PLN, tmp_path)
-    with caplog.at_level(logging.WARNING):
-        writer = _make_writer(pln_path)
-        writer.write(special_lines=[_get_offensive_names(1)[0]])
-    assert "is not a special teams play" in caplog.text
-    reloaded = read_gameplan(pln_path)
-    assert all(p is None for p in reloaded.custom_special_plays)
+
+    with pytest.raises(InvalidPlayInputError) as exc_info:
+        _make_writer(pln_path).write(special_lines=[_get_offensive_names(1)[0]])
+
+    assert any("is not a special teams play" in v for v in exc_info.value.violations)
 
 
-def test_duplicate_special_play_skipped_with_warning(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_duplicate_special_play_raises(tmp_path: Path) -> None:
     pln_path = _copy_pln(OFFENSE_PLN, tmp_path)
-    with caplog.at_level(logging.WARNING):
-        writer = _make_writer(pln_path)
-        writer.write(special_lines=["AF-KO", "af-ko"])
-    assert "Duplicate special play" in caplog.text
-    reloaded = read_gameplan(pln_path)
-    assert sum(1 for p in reloaded.custom_special_plays if p is not None) == 1
+
+    with pytest.raises(InvalidPlayInputError) as exc_info:
+        _make_writer(pln_path).write(special_lines=["AF-KO", "af-ko"])
+
+    assert any("Duplicate special play" in v for v in exc_info.value.violations)
 
 
-def test_offense_special_in_defense_gameplan_skipped_with_warning(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_offense_special_in_defense_gameplan_raises(tmp_path: Path) -> None:
     pln_path = _copy_pln(DEFENSE_PLN, tmp_path)
-    with caplog.at_level(logging.WARNING):
-        writer = _make_writer(pln_path)
-        writer.write(special_lines=["AF-KO"])
-    assert "offensive special play but gameplan is defensive" in caplog.text
-    reloaded = read_gameplan(pln_path)
-    assert all(p is None for p in reloaded.custom_special_plays)
+
+    with pytest.raises(InvalidPlayInputError) as exc_info:
+        _make_writer(pln_path).write(special_lines=["AF-KO"])
+
+    assert any("offensive special play but gameplan is defensive" in v for v in exc_info.value.violations)
 
 
-def test_defense_special_in_offense_gameplan_skipped_with_warning(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_defense_special_in_offense_gameplan_raises(tmp_path: Path) -> None:
     pln_path = _copy_pln(OFFENSE_PLN, tmp_path)
-    with caplog.at_level(logging.WARNING):
-        writer = _make_writer(pln_path)
-        writer.write(special_lines=["BCFGPATD"])
-    assert "defensive special play but gameplan is offensive" in caplog.text
-    reloaded = read_gameplan(pln_path)
-    assert all(p is None for p in reloaded.custom_special_plays)
+
+    with pytest.raises(InvalidPlayInputError) as exc_info:
+        _make_writer(pln_path).write(special_lines=["BCFGPATD"])
+
+    assert any("defensive special play but gameplan is offensive" in v for v in exc_info.value.violations)
 
 
-def test_duplicate_special_category_skipped_with_warning(
-    tmp_path: Path,
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+def test_duplicate_special_category_raises(tmp_path: Path) -> None:
     """Two distinct play names that happen to share special_category=2.
 
     Built by stubbing the play pool with synthetic SpecialTeamsPlayRecord
@@ -452,15 +389,10 @@ def test_duplicate_special_category_skipped_with_warning(
     rec_b = SpecialTeamsPlayRecord(name="ALT-KO", play_file=play_file)
     pool._plays_by_name = {"AF-KO": rec_a, "ALT-KO": rec_b}  # type: ignore[attr-defined]
 
-    writer = GamePlanWriter(pool, pln_path)
-    with caplog.at_level(logging.WARNING):
-        writer.write(special_lines=["AF-KO", "ALT-KO"])
+    with pytest.raises(InvalidPlayInputError) as exc_info:
+        GamePlanWriter(pool, pln_path).write(special_lines=["AF-KO", "ALT-KO"])
 
-    assert "already filled by another play" in caplog.text
-    reloaded = read_gameplan(pln_path)
-    custom = reloaded.custom_special_plays
-    filled = [p.name for p in custom if p is not None]
-    assert filled == ["AF-KO"]
+    assert any("already filled by another play" in v for v in exc_info.value.violations)
 
 
 def test_partial_special_input_clears_remaining_special_preserves_normal(tmp_path: Path) -> None:

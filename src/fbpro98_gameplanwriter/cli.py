@@ -5,7 +5,10 @@ import logging
 from collections.abc import Sequence
 from pathlib import Path
 
+from fbpro98_gameplanwriter.gameplan_writer import InvalidPlayInputError
 from fbpro98_gameplanwriter.main import update_gameplan
+
+logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -71,13 +74,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         level=logging.INFO,
         format="%(levelname)s: %(message)s",
     )
-    update_gameplan(
-        gameplan_path=args.gameplan_path,
-        normal_source=args.normal_plays,
-        special_source=args.special_plays,
-        config_path=args.config,
-        play_path_override=args.play_path,
-    )
+    try:
+        update_gameplan(
+            gameplan_path=args.gameplan_path,
+            normal_source=args.normal_plays,
+            special_source=args.special_plays,
+            config_path=args.config,
+            play_path_override=args.play_path,
+        )
+    except InvalidPlayInputError as error:
+        for v in error.violations:
+            logger.error("%s", v)
+        logger.error("%d invalid input line(s) found. Gameplan NOT updated.", len(error.violations))
+        return 1
     return 0
 
 

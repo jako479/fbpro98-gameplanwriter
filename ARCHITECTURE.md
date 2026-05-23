@@ -24,7 +24,7 @@ src/fbpro98_gameplanwriter/
 - Loads the play pool via `pnfl-playpool.read_play_pool()`
 - Resolves each input line to a typed play record from the pool
 - Reads the existing target `.pln`, applies the requested updates, writes back
-- Logs warnings for skipped lines (unknown play, wrong side, duplicate, etc.) and continues
+- Collects every per-line rule violation (unknown play, wrong side, duplicate, etc.) and raises `InvalidPlayInputError` at the end of the input pass — the `.pln` is never written when any violation is found
 
 ## What this package assumes
 
@@ -43,14 +43,14 @@ Source-level (raise `ValueError`):
 - `--normal-plays` source has ≤ 64 lines
 - `--special-plays` source has ≤ 10 lines
 
-Per-line (warn and skip; never abort the write):
-- Unknown play name → skip
-- Play side mismatches gameplan profile → skip
-- Special-teams play in normal section → skip
-- Normal play in special section → skip
-- Duplicate play name in normal section → skip
-- Duplicate play name in special section → skip
-- Two custom specials targeting the same `special_category` → skip second
+Per-line (collect across the full input, then raise `InvalidPlayInputError` if any violations were found; the target `.pln` is never written):
+- Unknown play name
+- Play side mismatches gameplan profile
+- Special-teams play in normal section
+- Normal play in special section
+- Duplicate play name in normal section
+- Duplicate play name in special section
+- Two custom specials targeting the same `special_category`
 
 ## What this package does NOT do
 

@@ -37,6 +37,20 @@ def _slot_label(slot: int) -> str:
     return f"{row}-{col}"
 
 
+class InvalidPlayInputError(ValueError):
+    """Raised by `GamePlanWriter` when input lines contain rule violations.
+
+    Violations are collected across the full input pass so the user sees every
+    problem in one error rather than fixing one at a time. The full per-line
+    messages are available via the `violations` attribute.
+    """
+
+    def __init__(self, violations: list[str]) -> None:
+        self.violations = list(violations)
+        body = "\n  - ".join(self.violations)
+        super().__init__(f"{len(self.violations)} invalid input line(s):\n  - {body}")
+
+
 def _build_custom_play(record: object, play_pool_root: Path) -> CustomPlay:
     """Construct the CustomPlay reference the .pln stores for a play pool record."""
     record_path: Path = record.file_path  # type: ignore[attr-defined]
@@ -107,19 +121,23 @@ class GamePlanWriter:
         """Place plays into the 64 normal slots in input order.
 
         Truncates `lines` to MAX_NORMAL_PLAYS (64); extras are silently dropped.
-        Empty lines and duplicates leave their slot empty (with a warning for
-        duplicates). Plays not in the pool, special-teams plays, and plays of
-        the wrong offensive/defensive type for `gameplan` are skipped with a
-        warning. Returns a new GamePlan; the input is not mutated.
+        Empty lines leave their slot empty. Duplicates, plays not in the pool,
+        special-teams plays, and plays of the wrong offensive/defensive type
+        are collected across the full input and raised as `InvalidPlayInputError`
+        at the end of the pass. Returns a new GamePlan; the input is not
+        mutated.
         """
         truncated = list(lines)[:MAX_NORMAL_PLAYS]
         seen: dict[str, int] = {}
         entries: list[CustomPlay | None] = []
+        violations: list[str] = []
         for slot, line in enumerate(truncated):
-            entry, name = self._resolve_normal_line(slot, line, gameplan, seen)
+            entry, name = self._resolve_normal_line(slot, line, gameplan, seen, violations)
             entries.append(entry)
             if name:
                 seen[name] = slot
+        if violations:
+            raise InvalidPlayInputError(violations)
         return gameplan.with_normal_plays(entries)
 
     def apply_special_plays(
@@ -129,25 +147,29 @@ class GamePlanWriter:
     ) -> GamePlan:
         """Resolve special-play names from `lines` and place them in the gameplan.
 
-        Empty lines, duplicates, plays not in the pool, plays of the wrong
-        offensive/defensive type, plays whose category collides with another
-        already-placed play, and out-of-range categories are skipped with a
-        warning. The model places each accepted play in its own
+        Empty lines are skipped. Duplicates, plays not in the pool, plays of
+        the wrong offensive/defensive type, plays whose category collides with
+        another already-placed play, and out-of-range categories are collected
+        across the full input and raised as `InvalidPlayInputError` at the end
+        of the pass. The model places each accepted play in its own
         `special_category` slot; categories not covered are cleared. Returns
         a new GamePlan; the input is not mutated.
         """
         seen_names: dict[str, int] = {}  # upper name -> special_category
         seen_categories: set[int] = set()
         plays: list[CustomPlay] = []
+        violations: list[str] = []
         for line_index, line in enumerate(lines):
             name = line.strip()
             if not name:
                 continue
-            entry = self._resolve_special_line(line_index, name, gameplan, seen_names, seen_categories)
+            entry = self._resolve_special_line(line_index, name, gameplan, seen_names, seen_categories, violations)
             if entry is not None:
                 plays.append(entry)
                 seen_names[name.upper()] = entry.special_category
                 seen_categories.add(entry.special_category)
+        if violations:
+            raise InvalidPlayInputError(violations)
         return gameplan.with_custom_special_plays(plays)
 
     def _resolve_normal_line(
@@ -156,42 +178,31 @@ class GamePlanWriter:
         line: str,
         gameplan: GamePlan,
         seen: dict[str, int],
+        violations: list[str],
     ) -> tuple[CustomPlay | None, str]:
         name = line.strip()
         if not name:
             return None, ""
         upper_name = name.upper()
+        line_no = slot + 1
         if upper_name in seen:
-            logger.warning(
-                "Duplicate play '%s' at slot %s (line %d), already at slot %s (line %d), skipping",
-                name,
-                _slot_label(slot),
-                slot + 1,
-                _slot_label(seen[upper_name]),
-                seen[upper_name] + 1,
+            violations.append(
+                f"Duplicate play '{name}' at slot {_slot_label(slot)} (line {line_no}), "
+                f"already at slot {_slot_label(seen[upper_name])} (line {seen[upper_name] + 1})"
             )
             return None, ""
         record = self.play_pool.find_by_name(name)
         if record is None:
-            logger.warning("Play not found in PNFL play pool, skipping: %s", name)
+            violations.append(f"Play not found in PNFL play pool at line {line_no}: {name}")
             return None, ""
         if isinstance(record, SpecialTeamsPlayRecord):
-            logger.warning(
-                "Play '%s' is a special teams play, cannot add to normal slots, skipping",
-                name,
-            )
+            violations.append(f"Play '{name}' at line {line_no} is a special teams play, cannot add to normal slots")
             return None, ""
         if gameplan.is_offense and isinstance(record, DefensivePlayRecord):
-            logger.warning(
-                "Play '%s' is a defensive play but gameplan is offensive, skipping",
-                name,
-            )
+            violations.append(f"Play '{name}' at line {line_no} is a defensive play but gameplan is offensive")
             return None, ""
         if gameplan.is_defense and isinstance(record, OffensivePlayRecord):
-            logger.warning(
-                "Play '%s' is an offensive play but gameplan is defensive, skipping",
-                name,
-            )
+            violations.append(f"Play '{name}' at line {line_no} is an offensive play but gameplan is defensive")
             return None, ""
         return _build_custom_play(record, self.play_pool.root_dir), upper_name
 
@@ -202,53 +213,34 @@ class GamePlanWriter:
         gameplan: GamePlan,
         seen_names: dict[str, int],
         seen_categories: set[int],
+        violations: list[str],
     ) -> CustomPlay | None:
         upper_name = name.upper()
         line_no = line_index + 1
         if upper_name in seen_names:
-            logger.warning(
-                "Duplicate special play '%s' at line %d, already used for special category %d, skipping",
-                name,
-                line_no,
-                seen_names[upper_name],
+            violations.append(
+                f"Duplicate special play '{name}' at line {line_no}, "
+                f"already used for special category {seen_names[upper_name]}"
             )
             return None
         record = self.play_pool.find_by_name(name)
         if record is None:
-            logger.warning(
-                "Special play not found in PNFL play pool at line %d, skipping: %s",
-                line_no,
-                name,
-            )
+            violations.append(f"Special play not found in PNFL play pool at line {line_no}: {name}")
             return None
         if not isinstance(record, SpecialTeamsPlayRecord):
-            logger.warning(
-                "Play '%s' at line %d is not a special teams play, skipping",
-                name,
-                line_no,
-            )
+            violations.append(f"Play '{name}' at line {line_no} is not a special teams play")
             return None
         cat = record.special_category
         if gameplan.is_offense and not record.play_file.is_offensive:
-            logger.warning(
-                "Play '%s' at line %d is a defensive special play but gameplan is offensive, skipping",
-                name,
-                line_no,
-            )
+            violations.append(f"Play '{name}' at line {line_no} is a defensive special play but gameplan is offensive")
             return None
         if gameplan.is_defense and not record.play_file.is_defensive:
-            logger.warning(
-                "Play '%s' at line %d is an offensive special play but gameplan is defensive, skipping",
-                name,
-                line_no,
-            )
+            violations.append(f"Play '{name}' at line {line_no} is an offensive special play but gameplan is defensive")
             return None
         if cat in seen_categories:
-            logger.warning(
-                "Special play '%s' at line %d targets special category %d, already filled by another play, skipping",
-                name,
-                line_no,
-                cat,
+            violations.append(
+                f"Special play '{name}' at line {line_no} targets special category {cat}, "
+                f"already filled by another play"
             )
             return None
         return _build_custom_play(record, self.play_pool.root_dir)

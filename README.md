@@ -39,8 +39,8 @@ Each source is a plain text file (or stdin via `-`), one play name per line:
 
 - Blank lines mean the slot is empty
 - Play names are case-insensitive
-- Unknown play names are skipped with a warning
-- Plays of the wrong side (defensive in offensive gameplan, etc.) are skipped with a warning
+- Unknown play names raise `InvalidPlayInputError` (the `.pln` is not modified)
+- Plays of the wrong side (defensive in offensive gameplan, etc.), duplicates, and special/normal-section mismatches also raise `InvalidPlayInputError`. All violations from one input pass are collected and reported together.
 
 **Per-flag sources:**
 - `--normal-plays SOURCE` — up to **64 lines**. Line N goes to slot N. Trailing slots beyond the input are cleared. Over-max raises an error.

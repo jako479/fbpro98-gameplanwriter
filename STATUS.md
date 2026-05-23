@@ -10,7 +10,7 @@ Updates the normal-play and/or custom special-teams slots of a Front Page Sports
 - Reads play sources from a file path or stdin (`-`), including the shared-source mode where one source feeds both sections
 - Resolves play names against the play pool via `pnfl-playpool` and writes the binary `.pln` via `fbpro98-gameplan`
 - Positional 64-line normal section and self-slotting 10-line custom special section, with unsupplied slots cleared
-- Validation: line-count limits, play side vs. gameplan profile, normal/special section mismatch, and duplicate detection — skipped lines warn and never abort the write
+- Validation: line-count limits, play side vs. gameplan profile, normal/special section mismatch, and duplicate detection — per-line violations are collected and raised together as `InvalidPlayInputError`; the target `.pln` is not written when any violation is found
 - Config file lookup with `.dev.ini` precedence and a `--play-path` override
 - Stock special-teams plays and clock plays preserved untouched
 
