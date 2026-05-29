@@ -8,9 +8,9 @@ import pytest
 from conftest import OFFENSE_PLN, PLAYPOOL_DIR
 from fbpro98_gameplan import read_gameplan
 
-from fbpro98_gameplanwriter.cli import main, parse_args
-from fbpro98_gameplanwriter.config import load_config
-from fbpro98_gameplanwriter.gameplan_writer import GamePlanWriter
+from pnfl_gameplanwriter.cli import main, parse_args
+from pnfl_gameplanwriter.config import load_config
+from pnfl_gameplanwriter.gameplan_writer import GamePlanWriter
 
 # ---------- argparse ----------
 
@@ -426,7 +426,7 @@ def _default_mode_offense_stdout() -> str:
     import io as _io
     import sys as _sys
 
-    from fbpro98_gameplanreader.cli import main as reader_main
+    from pnfl_gameplanreader.cli import main as reader_main
 
     buf = _io.StringIO()
     saved = _sys.stdout
@@ -543,15 +543,15 @@ def test_main_normal_without_header_special_with_header_rejected(
 # ---------- main: play pool error handling ----------
 
 
-def test_main_invalid_play_path_raises_file_not_found(tmp_path: Path) -> None:
+def test_main_invalid_play_path_logs_error_and_exits_nonzero(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     pln_path = tmp_path / "offense.pln"
     shutil.copy2(OFFENSE_PLN, pln_path)
     plays_txt = tmp_path / "plays.txt"
     plays_txt.write_text("OR45RL01\n", encoding="utf-8")
 
     bad_path = tmp_path / "does_not_exist"
-    with pytest.raises(FileNotFoundError, match="Play pool path does not exist"):
-        main(
+    with caplog.at_level("ERROR", logger="pnfl_gameplanwriter.cli"):
+        exit_code = main(
             [
                 str(pln_path),
                 "--normal-plays",
@@ -560,6 +560,8 @@ def test_main_invalid_play_path_raises_file_not_found(tmp_path: Path) -> None:
                 str(bad_path),
             ]
         )
+    assert exit_code == 1
+    assert "Play pool path does not exist" in caplog.text
 
 
 def test_main_empty_play_path_raises_value_error(tmp_path: Path) -> None:

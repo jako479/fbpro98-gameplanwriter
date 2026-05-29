@@ -3,7 +3,7 @@ requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "fbpro98-gameplanwriter"
+name = "pnfl-gameplanwriter"
 version = "0.1.0"
 description = "Updates a Front Page Sports Football Pro '98 game plan (.pln) from a list of plays."
 authors = [{ name = "Brian Jacobs" }]
@@ -11,17 +11,17 @@ readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.13"
-dependencies = ["fbpro98-gameplan", "pnfl-playpool"]
+dependencies = ["fbpro98-gameplan", "pnfl-gameplan", "pnfl-playpool"]
 
 [project.optional-dependencies]
 dev = ["pytest", "pyright==1.1.409", "ruff", "ipython"]
 
 [project.entry-points."pnfl.commands"]
-write-gameplan = "fbpro98_gameplanwriter.cli:main"
+write-gameplan = "pnfl_gameplanwriter.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/jako479/fbpro98-gameplanwriter"
-Repository = "https://github.com/jako479/fbpro98-gameplanwriter"
+Homepage = "https://github.com/jako479/pnfl-gameplanwriter"
+Repository = "https://github.com/jako479/pnfl-gameplanwriter"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -12,7 +12,8 @@ from collections.abc import Sequence
 from os import PathLike
 from pathlib import Path
 
-from fbpro98_gameplan import CustomPlay, GamePlan, read_gameplan, write_gameplan
+from fbpro98_gameplan import CustomPlay, GamePlan, write_gameplan
+from pnfl_gameplan import PNFL_RULES, PnflGamePlan, PnflRules
 from pnfl_playpool import (
     DefensivePlayRecord,
     OffensivePlayRecord,
@@ -21,7 +22,7 @@ from pnfl_playpool import (
     read_play_pool,
 )
 
-from fbpro98_gameplanwriter.config import Config
+from pnfl_gameplanwriter.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -71,15 +72,20 @@ class GamePlanWriter:
         self,
         play_pool: PlayPool,
         gameplan_path: StrPath,
+        *,
+        rules: PnflRules = PNFL_RULES,
     ) -> None:
         self.play_pool = play_pool
         self.gameplan_path = Path(gameplan_path)
+        self.rules = rules
 
     @classmethod
     def from_config(
         cls,
         config: Config,
         gameplan_path: StrPath,
+        *,
+        rules: PnflRules = PNFL_RULES,
     ) -> GamePlanWriter:
         play_path = Path(config.play_path)
         if not play_path.is_dir():
@@ -87,7 +93,7 @@ class GamePlanWriter:
         play_pool = read_play_pool(config.play_path)
         if not (play_pool.offensive_plays or play_pool.defensive_plays or play_pool.special_teams_plays):
             raise ValueError(f"Play pool at {config.play_path} contains no plays")
-        return cls(play_pool, gameplan_path)
+        return cls(play_pool, gameplan_path, rules=rules)
 
     def write(
         self,
@@ -99,8 +105,16 @@ class GamePlanWriter:
 
         A `None` section is left untouched in the existing gameplan; an empty
         list clears that section's slots.
+
+        Loads the target via `PnflGamePlan.from_file` (binding the gameplan to
+        the writer's PnflRules + PlayPool), modifies the underlying `GamePlan`,
+        and persists with `write_gameplan`. PNFL-rule validation is not run
+        automatically here — callers that want a validated save can do so via
+        `PnflGamePlan.from_file(path, rules, pool).save(path)` after this
+        method returns.
         """
-        gameplan = read_gameplan(self.gameplan_path)
+        pnfl_gameplan = PnflGamePlan.from_file(str(self.gameplan_path), self.rules, self.play_pool)
+        gameplan = pnfl_gameplan.gameplan
         if normal_lines is not None:
             gameplan = self.apply_normal_plays(gameplan, normal_lines)
         if special_lines is not None:

@@ -10,7 +10,7 @@ from fbpro98_gameplan import CustomPlay, Play, read_gameplan
 from fbpro98_play import read_play
 from pnfl_playpool import PlayPool, SpecialTeamsPlayRecord, read_play_pool
 
-from fbpro98_gameplanwriter.gameplan_writer import GamePlanWriter, InvalidPlayInputError
+from pnfl_gameplanwriter.gameplan_writer import GamePlanWriter, InvalidPlayInputError
 
 _pool: PlayPool | None = None
 

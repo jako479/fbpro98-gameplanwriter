@@ -8,8 +8,8 @@ from typing import TextIO
 
 from fbpro98_gameplan import GamePlan
 
-from fbpro98_gameplanwriter.config import load_config
-from fbpro98_gameplanwriter.gameplan_writer import GamePlanWriter
+from pnfl_gameplanwriter.config import load_config
+from pnfl_gameplanwriter.gameplan_writer import GamePlanWriter
 
 STDIN_TOKEN = "-"
 NORMAL_COUNT = GamePlan.NUMBER_NORMAL_PLAYS

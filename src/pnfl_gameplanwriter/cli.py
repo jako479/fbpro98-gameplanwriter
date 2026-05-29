@@ -5,15 +5,16 @@ import logging
 from collections.abc import Sequence
 from pathlib import Path
 
-from fbpro98_gameplanwriter.gameplan_writer import InvalidPlayInputError
-from fbpro98_gameplanwriter.main import update_gameplan
+from pnfl_gameplanwriter.gameplan_writer import InvalidPlayInputError
+from pnfl_gameplanwriter.main import update_gameplan
 
+PROG = "pnfl write-gameplan"
 logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="pnfl write-gameplan",
+        prog=PROG,
         description="Update a gameplan (.pln) from lists of normal and/or special teams plays.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
@@ -86,6 +87,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         for v in error.violations:
             logger.error("%s", v)
         logger.error("%d invalid input line(s) found. Gameplan NOT updated.", len(error.violations))
+        return 1
+    except OSError as error:
+        logger.error("%s: %s", PROG, error)
         return 1
     return 0
 

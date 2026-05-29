@@ -1,4 +1,4 @@
-# fbpro98-gameplanwriter — Architecture
+# pnfl-gameplanwriter — Architecture
 
 CLI tool that updates the normal and/or custom-special slots of an existing `.pln` from text input.
 
@@ -9,7 +9,7 @@ For validation ownership, see [pnfl-docs/Design/gameplan-validation.md](../pnfl-
 ## Module layout
 
 ```
-src/fbpro98_gameplanwriter/
+src/pnfl_gameplanwriter/
 ├── __init__.py
 ├── cli.py                 # argparse + main()
 ├── main.py                # update_gameplan(), source-loading helpers
@@ -22,9 +22,20 @@ src/fbpro98_gameplanwriter/
 - Provides a CLI: `pnfl write-gameplan DEST.pln [--normal-plays SOURCE] [--special-plays SOURCE] [--config FILE] [--play-path DIR]`
 - Reads `--normal-plays` / `--special-plays` from a file path or `-` (stdin)
 - Loads the play pool via `pnfl-playpool.read_play_pool()`
+- Loads the target `.pln` via `PnflGamePlan.from_file()`, binding rules + play pool at load time
 - Resolves each input line to a typed play record from the pool
-- Reads the existing target `.pln`, applies the requested updates, writes back
+- Applies the requested updates to the underlying `GamePlan`, writes back via `fbpro98-gameplan.write_gameplan()`
 - Collects every per-line rule violation (unknown play, wrong side, duplicate, etc.) and raises `InvalidPlayInputError` at the end of the input pass — the `.pln` is never written when any violation is found
+
+## PnflGamePlan binding
+
+`GamePlanWriter` accepts a `rules: PnflRules = PNFL_RULES` keyword argument and constructs a `PnflGamePlan` at load time inside `write()`. The wrapper binds the loaded gameplan to a PNFL rule set and the play pool, so a caller that wants to run PNFL aggregate-rule validation (category min counts, attribute caps, etc.) after a write can do so:
+
+```python
+PnflGamePlan.from_file(dest_path, PNFL_RULES, pool).save(dest_path)
+```
+
+The writer itself does **not** invoke PNFL-rule validation automatically — only the per-line format-level checks fire during `write()`. Aggregate-rule validation is opt-in at the call site so the writer remains usable for partial updates that don't satisfy every PNFL category minimum.
 
 ## What this package assumes
 
@@ -57,13 +68,14 @@ Per-line (collect across the full input, then raise `InvalidPlayInputError` if a
 - Parse `.pln` bytes (delegates to `fbpro98-gameplan`)
 - Validate model-level invariants (delegated to `GamePlan.__post_init__` via `with_normal_plays` / `with_custom_special_plays`)
 - Parse `.ply` files (delegated transitively via `pnfl-playpool` → `fbpro98-play`)
+- Run PNFL aggregate-rule validation (delegated to `pnfl-gameplan`; opt-in via `PnflGamePlan.save` at the call site)
 - Modify the play pool
 
 ## Input contract
 
 Input is positional and headerless. Line N of `--normal-plays` corresponds to slot N. Line N of `--special-plays` corresponds to `special_category` N+1 — but each play self-slots by its own `special_category`, so the line position is informational, not authoritative.
 
-Compatible with `fbpro98-gameplanreader`'s headerless modes:
+Compatible with `pnfl-gameplanreader`'s headerless modes:
 - `pnfl read-gameplan src.pln --normal-out - | pnfl write-gameplan dst.pln --normal-plays -`
 - `pnfl read-gameplan src.pln --normal-out - --special-out - | pnfl write-gameplan dst.pln --normal-plays - --special-plays -`
 

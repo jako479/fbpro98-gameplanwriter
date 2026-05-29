@@ -1,6 +1,6 @@
-# fbpro98-gameplanwriter
+# pnfl-gameplanwriter
 
-Updates the normal-play slots and/or custom special-teams slots in a Front Page Sports Football Pro '98 gameplan (`.pln`) file from text input. Uses `pnfl-playpool` to resolve play names to file paths and `fbpro98-gameplan` to read and write the binary `.pln` format. Stock special-teams plays and clock plays are preserved untouched. Offensive/defensive play types are validated against the gameplan's profile type.
+Updates the normal-play slots and/or custom special-teams slots in a Front Page Sports Football Pro '98 gameplan (`.pln`) file from text input. Uses `pnfl-playpool` to resolve play names to file paths and `pnfl-gameplan` (which wraps `fbpro98-gameplan`) to load and write the binary `.pln` format. Stock special-teams plays and clock plays are preserved untouched. Offensive/defensive play types are validated against the gameplan's profile type.
 
 ## Setup
 
@@ -10,6 +10,7 @@ py -3.13 -m venv .venv
 py -m pip install -e ..\fbpro98-play
 py -m pip install -e ..\fbpro98-gameplan
 py -m pip install -e ..\pnfl-playpool
+py -m pip install -e ..\pnfl-gameplan
 py -m pip install -e ".[dev]"
 ```
 
@@ -66,9 +67,26 @@ OR36RL01
 
 Slot 2 (the blank line) would be empty in the gameplan; slots 4-63 stay empty.
 
+### PNFL-rule validation
+
+The writer enforces per-line format-level checks (unknown play, duplicates, wrong side, etc.) but does **not** automatically run PNFL aggregate-rule validation (category min counts, attribute caps, etc.). Callers that want a validated save can do so after `write()`:
+
+```python
+from pnfl_gameplan import PNFL_RULES, PnflGamePlan
+PnflGamePlan.from_file(dest_path, PNFL_RULES, pool).save(dest_path)
+```
+
+`PnflGamePlan.save` raises `PnflRuleError` if validation fails; otherwise it re-writes the same bytes.
+
 ## Building a Release
 
-This project is distributed as part of the [`pnfl`](../pnfl) umbrella CLI. See `pnfl/scripts/build_release.py` for release packaging.
+Ships these artifacts to the umbrella bundle:
+
+- `release/write-gameplan.bat` — launcher template
+- `config/write-gameplan.ini` — release config
+- Python wheel (built by `pnfl/scripts/build_release.py`)
+
+Distributed as part of the [`pnfl`](../pnfl) umbrella CLI.
 
 ## Testing
 
@@ -76,4 +94,4 @@ This project is distributed as part of the [`pnfl`](../pnfl) umbrella CLI. See `
 pytest
 ```
 
-Cross-CLI pipeline tests (`read-gameplan` → `write-gameplan`) live in [`pnfl/tests/test_pipeline.py`](../pnfl/tests/test_pipeline.py).
+Cross-CLI pipeline tests (`read-gameplan` → `write-gameplan`) live in [`pnfl/tests/test_gameplan.py`](../pnfl/tests/test_gameplan.py).
